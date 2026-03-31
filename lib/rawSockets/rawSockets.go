@@ -11,9 +11,6 @@ import (
 
 const crcPolynomial = 0x07
 const ethPAll = 0x0003
-const solPacket = 263
-const packetAddMembership = 1
-const packetMrPromisc = 1
 
 type packetMreq struct {
 	Ifindex int32
