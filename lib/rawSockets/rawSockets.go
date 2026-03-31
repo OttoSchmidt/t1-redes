@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+	"golang.org/x/sys/unix"
 
 	crc "pacman-redes/lib/crc"
 	debug "pacman-redes/lib/debug"
@@ -40,7 +41,18 @@ func CreateRawSocket(ifaceName string) (int, error) {
 		return 0, fmt.Errorf("falha ao vincular socket: %w", err)
 	}
 
-	debug.PrintLog("Socket raw na interface %s (ifindex=%d)\n", iface.Name, iface.Index)
+	// Habilitar modo promíscuo
+	mreq := unix.PacketMreq{
+		Ifindex: int32(iface.Index),
+		Type:    unix.PACKET_MR_PROMISC,
+	}
+	if err := unix.SetsockoptPacketMreq(sock, unix.SOL_PACKET, unix.PACKET_ADD_MEMBERSHIP, &mreq); err != nil {
+		syscall.Close(sock)
+		return 0, fmt.Errorf("falha ao habilitar modo promíscuo: %w", err)
+	}
+
+	debug.PrintLog("Socket raw na interface %s (ifindex=%d) com modo promíscuo\n", iface.Name, iface.Index)
+	
 	return sock, nil
 }
 
