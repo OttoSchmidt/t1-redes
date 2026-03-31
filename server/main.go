@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	rawsockets "pacman-redes/lib/rawSockets"
+	debug "pacman-redes/lib/debug"
 )
 
 func main() {
@@ -30,14 +31,14 @@ func main() {
 			panic(err)
 		}
 
-		content, id, packetType, crc, err := rawsockets.ReadMessage(buf[:n], n)
+		content, id, packetType, crc, err := rawsockets.ReadMessage(buf, n)
 		if err != nil {
-			fmt.Printf("Erro ao ler mensagem: %v\n", err)
+			debug.PrintLog("Erro ao ler mensagem: %v\n", err)
 			continue
 		}
 
 		fmt.Printf("Pacote capturado: %d bytes\n", n)
-		fmt.Printf("ID: %d, Tipo: %d, CRC: %d\n", id, packetType, crc)
+		debug.PrintLog("ID: %d, Tipo: %d, CRC: %d\n", id, packetType, crc)
 		fmt.Printf("Conteúdo: %s\n\n", content)
 	}
 }

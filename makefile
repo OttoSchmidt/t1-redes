@@ -1,21 +1,22 @@
 SERVER_BIN=pacman_server
 CLIENT_BIN=pacman_client
-LIB_MODULES=./lib/crc ./lib/rawSockets
 GO=go
 
-.PHONY: all lib client server clean
+.PHONY: all debug client server clean
 
-lib:
-	$(GO) build $(LIB_MODULES)
-
-client: lib
-	$(GO) build -o $(CLIENT_BIN) client/main.go
-
-server: lib
-	$(GO) build -o $(SERVER_BIN) server/main.go	
+BUILD_FLAGS?=
 
 all: client server
 
+debug:
+	$(eval BUILD_FLAGS += -tags debug)
+
+client:
+	$(GO) build $(BUILD_FLAGS) -o $(CLIENT_BIN) client/main.go
+
+server:
+	$(GO) build $(BUILD_FLAGS) -o $(SERVER_BIN) server/main.go	
+
 clean:
 	rm -f $(SERVER_BIN) $(CLIENT_BIN)
-	$(GO) clean $(LIB_MODULES) server/... client/...
+	$(GO) clean

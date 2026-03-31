@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net"
 	"syscall"
-	"unsafe"
 
 	crc "pacman-redes/lib/crc"
+	debug "pacman-redes/lib/debug"
 )
 
 const crcPolynomial = 0x07
@@ -50,27 +50,7 @@ func CreateRawSocket(ifaceName string) (int, error) {
 		return 0, fmt.Errorf("falha ao vincular socket: %w", err)
 	}
 
-	// habilitar modo promíscuo
-	mreq := packetMreq{
-		Ifindex: int32(iface.Index),
-		Type:    packetMrPromisc,
-	}
-	_, _, errno := syscall.Syscall6(
-		syscall.SYS_SETSOCKOPT,
-		uintptr(sock),
-		uintptr(solPacket),
-		uintptr(packetAddMembership),
-		uintptr(unsafe.Pointer(&mreq)),
-		unsafe.Sizeof(mreq),
-		0,
-	)
-	if errno != 0 {
-		err = errno
-		syscall.Close(sock)
-		return 0, fmt.Errorf("falha ao habilitar modo promíscuo: %w", err)
-	}
-
-	fmt.Printf("Socket raw em modo promíscuo na interface %s (ifindex=%d)\n", iface.Name, iface.Index)
+	debug.PrintLog("Socket raw na interface %s (ifindex=%d)\n", iface.Name, iface.Index)
 	return sock, nil
 }
 
@@ -97,7 +77,7 @@ func BuildFrame(content string, id uint8, packetType uint8) []byte {
 	
 	frame = append(frame, crc.CalculateCRC(frame))
 
-	fmt.Printf("Frame construído: %v\n", frame)
+	debug.PrintLog("Frame construído: %v\n", frame)
 
 	return frame
 }

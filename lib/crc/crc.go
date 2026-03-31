@@ -2,18 +2,14 @@ package crc
 
 import (
 	"fmt"
+	debug "pacman-redes/lib/debug"
 )
 
 // fonte: https://web.archive.org/web/20230525024916/http://sbs-forum.org/marcom/dc2/20_crc-8_firmware_implementations.pdf
 
 type lookupTable [16][16]byte
-var crcTable lookupTable
-const crcPolynomial = 0x07
 
-func init() {
-	// Gerar tabela de lookup para CRC-8
-	fmt.Printf("Gerando tabela de CRC-8 com polinômio 0x%02X...\n", crcPolynomial)
-
+func (t *lookupTable) generate() {
 	for i := 0; i < 16; i++ {
 		for j := 0; j < 16; j++ {
 			// valor inicial de crc é o XOR do índice i e j, que representa 
@@ -31,15 +27,37 @@ func init() {
 			}
 
 			crcTable[i][j] = crc
-			fmt.Printf("%02x ", crc)
 		}
+	}
+}
+
+func (t *lookupTable) print() {
+	for i := 0; i < 16; i++ {
+		for j := 0; j < 16; j++ {
+			fmt.Printf("%02X ", t[i][j])
+		}
+		fmt.Println()
+	}
+}
+
+var crcTable lookupTable
+const crcPolynomial = 0x07
+
+func init() {
+	debug.PrintLog("Gerando tabela de CRC-8 com polinômio 0x%02X.\n", crcPolynomial)
+
+	crcTable.generate()
+
+	debug.PrintLog("Tabela de CRC-8 gerada:\n")
+	if debug.Debug {
+		crcTable.print()
 	}
 }
 
 func CalculateCRC(data []byte) byte {
 	crcDataPortion := data[1 : len(data)-1] // excluir marcador de início e CRC
 
-	fmt.Printf("Calculando CRC para os dados: %x\n", crcDataPortion)
+	debug.PrintLog("Calculando CRC para os dados: %x\n", crcDataPortion)
 	
 	// converter vetor de bytes para um número inteiro para facilitar o cálculo do CRC
 	crc := byte(0)
@@ -48,7 +66,7 @@ func CalculateCRC(data []byte) byte {
 		crc = crcTable[value>>4][value&0x0F] // usar os 4 bits superiores e inferiores para indexar a tabela
 	}
 
-	fmt.Printf("CRC calculado: %d (0x%02X)\n", crc, crc)
+	debug.PrintLog("CRC calculado: %02X\n", crc)
 
 	return crc
 }
