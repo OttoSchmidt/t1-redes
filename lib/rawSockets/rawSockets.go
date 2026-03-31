@@ -12,13 +12,6 @@ import (
 const crcPolynomial = 0x07
 const ethPAll = 0x0003
 
-type packetMreq struct {
-	Ifindex int32
-	Type    uint16
-	Alen    uint16
-	Address  [8]byte
-}
-
 func htons(v uint16) uint16 {
 	return (v<<8)&0xff00 | v>>8
 }
