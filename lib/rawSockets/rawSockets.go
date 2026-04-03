@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+
 	"golang.org/x/sys/unix"
 
 	crc "pacman-redes/lib/crc"
@@ -56,7 +57,8 @@ func CreateRawSocket(ifaceName string) (int, error) {
 	return sock, nil
 }
 
-func BuildFrame(content string, id uint8, packetType uint8) []byte {
+// Controi um array de bytes representando a mensagem a ser enviada
+func buildMessage(content string, id uint8, packetType uint8) []byte {
 	frame := []byte{
 		0x7E, // marcador de inicio
 	}
@@ -77,7 +79,7 @@ func BuildFrame(content string, id uint8, packetType uint8) []byte {
 
 	frame = append(frame, payload...)
 	
-	frame = append(frame, crc.CalculateCRC(frame))
+	frame = append(frame, crc.CalculateCRC(frame[1:]))
 
 	debug.PrintLog("Frame construído: %v\n", frame)
 
@@ -85,33 +87,42 @@ func BuildFrame(content string, id uint8, packetType uint8) []byte {
 }
 
 func SendMessage(sock int, content string, packetType uint8) (int, error) {
-	frame := BuildFrame(content, 0, packetType)
+	frame := buildMessage(content, 0, packetType)
 
 	n, err := syscall.Write(sock, frame)
 
 	return n, err
 }
 
-func ReadMessage(buf []byte, n int) (string, uint8, uint8, uint8, error) {
+func ReadMessage(buf []byte, n int) (string, error) {
 	if n < 4 {
-		return "", 0, 0, 0, fmt.Errorf("pacote muito curto")
+		return "", fmt.Errorf("pacote muito curto")
 	}
 
 	if buf[0] != 0x7E {
 		// descartar pacotes que não começam com o marcador de inicio
-		return "", 0, 0, 0, fmt.Errorf("marcador de inicio inválido")
+		return "", fmt.Errorf("marcador de inicio inválido")
 	}
 
 	size := (buf[1] >> 3)
-	id := ((buf[1] & 0x07) << 3) | (buf[2] >> 5)
-	packetType := buf[2] & 0x1F
+	msg := buf[:4+size]
+	
+	id := ((msg[1] & 0x07) << 3) | (msg[2] >> 5)
+	packetType := msg[2] & 0x1F
 
 	if int(size) > n-4 {
-		return "", 0, 0, 0, fmt.Errorf("tamanho declarado maior que o recebido")
+		return "", fmt.Errorf("tamanho declarado maior que o recebido")
 	}
 
-	content := string(buf[3 : 3+size])
-	crc := buf[3+size]
+	content := string(msg[3 : 3+size])
+	crcValue := msg[3+size]
 
-	return content, id, packetType, crc, nil
+	fmt.Printf("Pacote capturado (%d bytes): [tam: %v | seq: %v | tipo: %v | crc: %v]\n", n, size, id, packetType, crcValue)
+	debug.PrintLog("Mensagem: %v\n", msg)
+
+	if !crc.VerifyCRC(msg[1:3+size], crcValue) {
+		return "", fmt.Errorf("CRC invalido")
+	}
+
+	return content, nil
 }

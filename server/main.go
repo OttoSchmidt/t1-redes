@@ -5,8 +5,8 @@ import (
 	"os"
 	"syscall"
 
-	rawsockets "pacman-redes/lib/rawSockets"
 	debug "pacman-redes/lib/debug"
+	rawsockets "pacman-redes/lib/rawSockets"
 )
 
 func main() {
@@ -25,6 +25,7 @@ func main() {
 
 	buf := make([]byte, 36)
 
+	fmt.Println("Servidor iniciado. Esperando mensagens...")
 	for {
 		n, addr, err := syscall.Recvfrom(sock, buf, 0)
 		if err != nil {
@@ -38,14 +39,12 @@ func main() {
 			continue 
 		}
 
-		content, id, packetType, crc, err := rawsockets.ReadMessage(buf, n)
+		content, err := rawsockets.ReadMessage(buf, n)
 		if err != nil {
 			debug.PrintLog("Erro ao ler mensagem: %v\n", err)
 			continue
 		}
 
-		fmt.Printf("Pacote capturado (%d bytes)\n", n)
-		debug.PrintLog("ID: %d, Tipo: %d, CRC: %d\n", id, packetType, crc)
 		fmt.Printf("Conteúdo: %s\n\n", content)
 	}
 }

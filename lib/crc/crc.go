@@ -54,14 +54,13 @@ func init() {
 	}
 }
 
+// Calcula o CRC-8 para o buffer fornecido, o qual deve incluir somente 
+// os campos de tamanho, ID, tipo e dados
 func CalculateCRC(data []byte) byte {
-	crcDataPortion := data[1 : len(data)-1] // excluir marcador de início e CRC
-
-	debug.PrintLog("Calculando CRC para os dados: %x\n", crcDataPortion)
+	debug.PrintLog("Calculando CRC para os dados: %x\n", data)
 	
-	// converter vetor de bytes para um número inteiro para facilitar o cálculo do CRC
 	crc := byte(0)
-	for _, b := range crcDataPortion {
+	for _, b := range data {
 		value := b ^ crc // XOR do byte atual com o CRC acumulado
 		crc = crcTable[value>>4][value&0x0F] // usar os 4 bits superiores e inferiores para indexar a tabela
 	}
@@ -69,4 +68,13 @@ func CalculateCRC(data []byte) byte {
 	debug.PrintLog("CRC calculado: %02X\n", crc)
 
 	return crc
+}
+
+// Verifica se o CRC recebido é válido para os dados fornecidos. O buffer deve incluir
+// somente os campos de tamanho, ID, tipo e dados.
+func VerifyCRC(data []byte, receivedCRC byte) bool {
+	debug.PrintLog("CRC recebido: %02X\n", receivedCRC)
+	calculatedCRC := CalculateCRC(data)
+
+	return receivedCRC == calculatedCRC
 }
