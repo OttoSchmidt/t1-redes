@@ -104,11 +104,7 @@ func buildMessage(content string, sequence uint8, packetType uint8) []byte {
 	return frame
 }
 
-func SendMessage(sock int, content string, packetType uint8) (int, error) {
-	return SendMessageWithSequence(sock, content, 0, packetType)
-}
-
-func SendMessageWithSequence(sock int, content string, sequence uint8, packetType uint8) (int, error) {
+func SendMessage(sock int, content string, sequence uint8, packetType uint8) (int, error) {
 	frame := buildMessage(content, sequence, packetType)
 
 	n, err := syscall.Write(sock, frame)

@@ -50,11 +50,11 @@ func main() {
 		case rawsockets.PacketTypeAck, rawsockets.PacketTypeNack:
 			continue
 		case rawsockets.PacketTypeData:
-			if _, err := rawsockets.SendMessageWithSequence(sock, "ACK", msg.Sequence, rawsockets.PacketTypeAck); err != nil {
+			if _, err := rawsockets.SendMessage(sock, "ACK", msg.Sequence, rawsockets.PacketTypeAck); err != nil {
 				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
 			}
 		default:
-			if _, err := rawsockets.SendMessageWithSequence(sock, "NACK", msg.Sequence, rawsockets.PacketTypeNack); err != nil {
+			if _, err := rawsockets.SendMessage(sock, "NACK", msg.Sequence, rawsockets.PacketTypeNack); err != nil {
 				debug.PrintLog("Erro ao enviar NACK: %v\n", err)
 			}
 		}

@@ -29,7 +29,7 @@ func main() {
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		sequence := uint8((attempt - 1) & 0x3F)
-		n, err := rawsockets.SendMessageWithSequence(sock, message, sequence, rawsockets.PacketTypeData)
+		n, err := rawsockets.SendMessage(sock, message, sequence, rawsockets.PacketTypeData)
 		if err != nil {
 			panic(err)
 		}
