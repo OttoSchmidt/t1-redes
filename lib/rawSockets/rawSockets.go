@@ -24,7 +24,7 @@ var SequenceNumber uint8 = 0
 const (
 	PacketTypeAck  uint8 = 0
 	PacketTypeNack uint8 = 1
-	PacketTypeData uint8 = 2
+	PacketTypeData uint8 = 4
 )
 
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")
