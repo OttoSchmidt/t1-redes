@@ -16,6 +16,11 @@ import (
 const ethPAll = 0x0003
 const startMarker = 0x7E
 
+const maxAttempts = 4
+const initialTimeoutMillis = 1000
+
+var SequenceNumber uint8 = 0
+
 const (
 	PacketTypeAck  uint8 = 0
 	PacketTypeNack uint8 = 1
@@ -110,6 +115,35 @@ func SendMessage(sock int, content string, sequence uint8, packetType uint8) (in
 	n, err := syscall.Write(sock, frame)
 
 	return n, err
+}
+
+func AttemptSendMessage(sock int, packet Message) error {
+	timeoutMillis := initialTimeoutMillis
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		n, err := SendMessage(sock, packet.Content, packet.Sequence, PacketTypeData)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, maxAttempts, n, packet.Sequence, timeoutMillis)
+
+		ack, err := ReceivePacketTypeWithTimeout(sock, timeoutMillis, PacketTypeAck)
+		if err == nil {
+			fmt.Printf("ACK recebido: %s\n", ack.Content)
+			return nil
+		}
+
+		if errors.Is(err, ErrTimeout) {
+			fmt.Printf("Sem ACK dentro de %dms; reenviando...\n", timeoutMillis)
+			timeoutMillis *= 2
+			continue
+		}
+
+		panic(err)
+	}
+
+	return fmt.Errorf("falha ao obter ACK: limite de tentativas atingido")
 }
 
 func ReadPacket(buf []byte, n int) (Message, error) {
