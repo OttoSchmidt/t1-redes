@@ -19,7 +19,7 @@ const startMarker = 0x7E
 const (
 	PacketTypeAck  uint8 = 0
 	PacketTypeNack uint8 = 1
-	PacketTypeData uint8 = 2
+	PacketTypeData uint8 = 4
 )
 
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")
