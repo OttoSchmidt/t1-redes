@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	// interface padrao: loopback. para usar outra interface, 
+	// interface padrao: loopback. para usar outra interface,
 	// passe o nome como argumento,como: eth0, enp3s0...
 	ifaceName := "lo"
 	if len(os.Args) > 1 {
@@ -32,19 +32,34 @@ func main() {
 			panic(err)
 		}
 
-		if llAddr, ok := addr.(*syscall.SockaddrLinklayer); 
-			ok && llAddr.Pkttype == syscall.PACKET_OUTGOING {
-			// Ignora pacotes enviados. eles aparecem no loopback, 
+		if llAddr, ok := addr.(*syscall.SockaddrLinklayer); ok && llAddr.Pkttype == syscall.PACKET_OUTGOING {
+			// Ignora pacotes enviados. eles aparecem no loopback,
 			// mas não em interfaces físicas.
-			continue 
-		}
-
-		content, err := rawsockets.ReadMessage(buf, n)
-		if err != nil {
-			debug.PrintLog("Erro ao ler mensagem: %v\n", err)
 			continue
 		}
 
-		fmt.Printf("Conteúdo: %s\n\n", content)
+		msg, err := rawsockets.ReadPacket(buf, n)
+		if err != nil {
+			if err != rawsockets.ErrInvalidStartMarker {
+				debug.PrintLog("Erro ao ler mensagem: %v\n", err)
+			}
+				
+			continue
+		}
+
+		fmt.Printf("Conteúdo: %s\n\n", msg.Content)
+
+		switch msg.PacketType {
+		case rawsockets.PacketTypeAck, rawsockets.PacketTypeNack:
+			continue
+		case rawsockets.PacketTypeData:
+			if _, err := rawsockets.SendMessage(sock, "ACK", msg.Sequence, rawsockets.PacketTypeAck); err != nil {
+				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
+			}
+		default:
+			if _, err := rawsockets.SendMessage(sock, "NACK", msg.Sequence, rawsockets.PacketTypeNack); err != nil {
+				debug.PrintLog("Erro ao enviar NACK: %v\n", err)
+			}
+		}
 	}
 }
