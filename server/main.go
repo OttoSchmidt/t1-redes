@@ -40,7 +40,10 @@ func main() {
 
 		msg, err := rawsockets.ReadPacket(buf, n)
 		if err != nil {
-			debug.PrintLog("Erro ao ler mensagem: %v\n", err)
+			if err != rawsockets.ErrInvalidStartMarker {
+				debug.PrintLog("Erro ao ler mensagem: %v\n", err)
+			}
+				
 			continue
 		}
 

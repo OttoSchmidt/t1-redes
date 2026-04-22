@@ -28,6 +28,7 @@ const (
 )
 
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")
+var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
 
 type Message struct {
 	Content    string
@@ -104,6 +105,11 @@ func buildMessage(content string, sequence uint8, packetType uint8) []byte {
 
 	frame = append(frame, crc.CalculateCRC(frame[1:]))
 
+	if (len(frame) < 15) {
+		padding := make([]byte, 15-len(frame))
+		frame = append(frame, padding...)
+	}
+
 	debug.PrintLog("Frame construído: %v\n", frame)
 
 	return frame
@@ -120,10 +126,11 @@ func SendMessage(sock int, content string, sequence uint8, packetType uint8) (in
 func AttemptSendMessage(sock int, packet Message) error {
 	timeoutMillis := initialTimeoutMillis
 
+	err := error(nil)
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		n, err := SendMessage(sock, packet.Content, packet.Sequence, PacketTypeData)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("falha ao enviar mensagem: %w", err)
 		}
 
 		fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, maxAttempts, n, packet.Sequence, timeoutMillis)
@@ -140,10 +147,10 @@ func AttemptSendMessage(sock int, packet Message) error {
 			continue
 		}
 
-		panic(err)
+		return fmt.Errorf("erro ao aguardar ACK: %w", err)
 	}
 
-	return fmt.Errorf("falha ao obter ACK: limite de tentativas atingido")
+	return fmt.Errorf("falha ao obter ACK: limite de tentativas atingido: %w", err)
 }
 
 func ReadPacket(buf []byte, n int) (Message, error) {
@@ -153,7 +160,7 @@ func ReadPacket(buf []byte, n int) (Message, error) {
 
 	if buf[0] != startMarker {
 		// descartar pacotes que não começam com o marcador de inicio
-		return Message{}, fmt.Errorf("marcador de inicio inválido")
+		return Message{}, ErrInvalidStartMarker
 	}
 
 	size := (buf[1] >> 3)

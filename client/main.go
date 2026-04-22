@@ -26,6 +26,4 @@ func main() {
 		Sequence:   rawsockets.SequenceNumber,
 		PacketType: rawsockets.PacketTypeData,
 	})
-
-	panic("falha ao obter ACK: limite de tentativas atingido")
 }
