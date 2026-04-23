@@ -53,12 +53,12 @@ func main() {
 		case rawsockets.PacketTypeAck, rawsockets.PacketTypeNack:
 			continue
 		case rawsockets.PacketTypeData:
-			reply := rawsockets.CreateMessage("ACK", rawsockets.PacketTypeAck)
+			reply := rawsockets.CreateMessage("", rawsockets.PacketTypeAck)
 			if _, err := rawsockets.SendMessage(sock, reply); err != nil {
 				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
 			}
 		default:
-			reply := rawsockets.CreateMessage("NACK", rawsockets.PacketTypeNack)
+			reply := rawsockets.CreateMessage("", rawsockets.PacketTypeNack)
 			if _, err := rawsockets.SendMessage(sock, reply); err != nil {
 				debug.PrintLog("Erro ao enviar NACK: %v\n", err)
 			}

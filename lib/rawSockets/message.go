@@ -17,9 +17,20 @@ const initialTimeoutMillis = 500
 const maxTimeoutMillis = 4000
 
 const (
-	PacketTypeAck  uint8 = 0
-	PacketTypeNack uint8 = 1
-	PacketTypeData uint8 = 4
+	PacketTypeAck       uint8 = 0
+	PacketTypeNack      uint8 = 1
+	PacketTypeVisualize uint8 = 2
+	PacketTypeInit      uint8 = 3
+	PacketTypeData      uint8 = 4
+	PacketTypeTxtFile   uint8 = 5
+	PacketTypeJpgFile   uint8 = 6
+	PacketTypeMp4File   uint8 = 7
+	PacketTypeMoveRight uint8 = 10
+	PacketTypeMoveLeft  uint8 = 11
+	PacketTypeMoveUp    uint8 = 12
+	PacketTypeMoveDown  uint8 = 13
+	PacketTypeError     uint8 = 15
+	PacketTypeEnd	    uint8 = 16
 )
 
 type Message struct {
@@ -80,6 +91,7 @@ func (s *State) addSequence() {
 }
 
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")
+var ErrNackReceived = errors.New("NACK recebido")
 var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
 
 var ServerState = State{}
@@ -117,19 +129,23 @@ func AttemptSendMessage(sock int, packet Message) error {
 
 		fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, maxAttempts, n, packet.Sequence, timeoutMillis)
 
-		ack, err := ReceivePacketTypeWithTimeout(sock, timeoutMillis, PacketTypeAck)
-		if err == nil {
-			fmt.Printf("ACK recebido: %s\n", ack.Content)
+		_, err = ReceivePacketTypeWithTimeout(sock, timeoutMillis, PacketTypeAck)
+		
+		switch {
+		case errors.Is(err, ErrNackReceived):
+			fmt.Printf("NACK recebido; reenviando...\n")
+			defer AttemptSendMessage(sock, packet)
 			return nil
-		}
-
-		if errors.Is(err, ErrTimeout) {
-			fmt.Printf("Sem ACK dentro de %dms; reenviando...\n", timeoutMillis)
+		case errors.Is(err, ErrTimeout):
+			fmt.Printf("Sem resposta dentro de %dms; reenviando...\n", timeoutMillis)
 			timeoutMillis = min(timeoutMillis*2, maxTimeoutMillis)
 			continue
+		case err == nil:
+			fmt.Printf("ACK recebido\n")
+			return nil
+		default:
+			return fmt.Errorf("erro ao aguardar ACK: %w", err)
 		}
-
-		return fmt.Errorf("erro ao aguardar ACK: %w", err)
 	}
 
 	return fmt.Errorf("falha ao obter ACK: limite de tentativas atingido: %w", err)
@@ -227,11 +243,12 @@ func ReceivePacketTypeWithTimeout(sock int, timeoutMillis int, expectedType uint
 		}
 
 		msg, err := ReceivePacketWithTimeout(sock, int(remaining/time.Millisecond))
-		if err != nil {
-			if errors.Is(err, ErrTimeout) {
-				return Message{}, ErrTimeout
-			}
-
+		switch {
+		case errors.Is(err, ErrTimeout):
+			return Message{}, ErrTimeout
+		case errors.Is(err, ErrNackReceived):
+			return Message{}, ErrNackReceived
+		case err != nil:
 			return Message{}, err
 		}
 
