@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 
@@ -21,9 +22,11 @@ func main() {
 	}
 	defer syscall.Close(sock)
 
-	rawsockets.AttemptSendMessage(sock, rawsockets.Message{
-		Content:    "PACMAN-TEST-PACKET",
-		Sequence:   rawsockets.SequenceNumber,
-		PacketType: rawsockets.PacketTypeData,
-	})
+	for i := 0; i < 10; i++ {
+		msg := rawsockets.CreateMessage(fmt.Sprintf("PACMAN-TEST-PACKET-%d", i), rawsockets.PacketTypeData)
+		err = rawsockets.AttemptSendMessage(sock, msg)
+		if err != nil {
+			panic(err)
+		}
+	}
 }

@@ -27,7 +27,7 @@ func main() {
 
 	fmt.Println("Servidor iniciado. Esperando mensagens...")
 	for {
-		n, addr, err := syscall.Recvfrom(sock, buf, 0)
+		_, addr, err := syscall.Recvfrom(sock, buf, 0)
 		if err != nil {
 			panic(err)
 		}
@@ -38,7 +38,7 @@ func main() {
 			continue
 		}
 
-		msg, err := rawsockets.ReadPacket(buf, n)
+		msg, err := rawsockets.ReadPacket(buf)
 		if err != nil {
 			if err != rawsockets.ErrInvalidStartMarker {
 				debug.PrintLog("Erro ao ler mensagem: %v\n", err)
@@ -53,11 +53,13 @@ func main() {
 		case rawsockets.PacketTypeAck, rawsockets.PacketTypeNack:
 			continue
 		case rawsockets.PacketTypeData:
-			if _, err := rawsockets.SendMessage(sock, "ACK", msg.Sequence, rawsockets.PacketTypeAck); err != nil {
+			reply := rawsockets.CreateMessage("ACK", rawsockets.PacketTypeAck)
+			if _, err := rawsockets.SendMessage(sock, reply); err != nil {
 				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
 			}
 		default:
-			if _, err := rawsockets.SendMessage(sock, "NACK", msg.Sequence, rawsockets.PacketTypeNack); err != nil {
+			reply := rawsockets.CreateMessage("NACK", rawsockets.PacketTypeNack)
+			if _, err := rawsockets.SendMessage(sock, reply); err != nil {
 				debug.PrintLog("Erro ao enviar NACK: %v\n", err)
 			}
 		}

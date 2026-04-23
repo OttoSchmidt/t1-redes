@@ -16,10 +16,9 @@ import (
 const ethPAll = 0x0003
 const startMarker = 0x7E
 
-const maxAttempts = 4
-const initialTimeoutMillis = 1000
-
-var SequenceNumber uint8 = 0
+const maxAttempts = 50
+const initialTimeoutMillis = 500
+const maxTimeoutMillis = 4000
 
 const (
 	PacketTypeAck  uint8 = 0
@@ -27,14 +26,67 @@ const (
 	PacketTypeData uint8 = 4
 )
 
-var ErrTimeout = errors.New("timeout aguardando mensagem valida")
-var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
-
 type Message struct {
 	Content    string
 	Sequence   uint8
 	PacketType uint8
 }
+
+func (m Message) String() string {
+	return fmt.Sprintf("Tamanho: %d, Sequencia: %d, Tipo: %d", len(m.Content), m.Sequence, m.PacketType)
+}
+
+// Controi um array de bytes representando a mensagem a ser enviada
+func (m Message) toBytes() []byte {
+	frame := []byte{
+		startMarker, // marcador de inicio
+	}
+
+	payload := []byte(m.Content)
+	size := uint8(len(payload))
+
+	// garantir que hajam 32 bytes de dados
+	if size > 31 {
+		payload = payload[:31]
+		size = 31
+	}
+
+	sequence := m.Sequence & 0x3F
+
+	// segundo byte: primeiros 5 bits de tamanho + 3 bits da sequência
+	frame = append(frame, byte((size&0x1F)<<3|(sequence&0x38)>>3))
+
+	// terceiro byte: últimos 3 bits da sequência + 5 bits de tipo
+	frame = append(frame, byte((sequence&0x07)<<5)|(m.PacketType&0x1F))
+
+	frame = append(frame, payload...)
+
+	frame = append(frame, crc.CalculateCRC(frame[1:]))
+
+	// tamanho minimo de 15 bytes
+	if (len(frame) < 15) {
+		padding := make([]byte, 15-len(frame))
+		frame = append(frame, padding...)
+	}
+
+	debug.PrintLog("Mensagem convertida p/ bytes: %v\n", frame)
+
+	return frame
+}
+
+type State struct {
+	SequenceNumber    uint8
+	LastSentMessage   Message
+}
+
+func (s *State) addSequence() {
+	s.SequenceNumber = (s.SequenceNumber + 1) % 64
+}
+
+var ErrTimeout = errors.New("timeout aguardando mensagem valida")
+var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
+
+var ServerState = State{}
 
 func htons(v uint16) uint16 {
 	return (v<<8)&0xff00 | v>>8
@@ -79,44 +131,23 @@ func CreateRawSocket(ifaceName string) (int, error) {
 	return sock, nil
 }
 
-// Controi um array de bytes representando a mensagem a ser enviada
-func buildMessage(content string, sequence uint8, packetType uint8) []byte {
-	frame := []byte{
-		startMarker, // marcador de inicio
+
+
+
+func CreateMessage(content string, packetType uint8) Message {
+	// incrementar o numero de sequência para a próxima mensagem
+	// após a função retornar
+	defer ServerState.addSequence()
+
+	return Message{
+		Content: content,
+		Sequence: ServerState.SequenceNumber,
+		PacketType: packetType,
 	}
-
-	payload := []byte(content)
-	size := uint8(len(payload))
-
-	if size > 31 {
-		payload = payload[:31]
-		size = 31
-	}
-
-	sequence &= 0x3F
-
-	// segundo byte: primeiros 5 bits de tamanho + 3 bits da sequência
-	frame = append(frame, byte((size&0x1F)<<3|(sequence&0x38)>>3))
-
-	// terceiro byte: últimos 3 bits da sequência + 5 bits de tipo
-	frame = append(frame, byte((sequence&0x07)<<5)|(packetType&0x1F))
-
-	frame = append(frame, payload...)
-
-	frame = append(frame, crc.CalculateCRC(frame[1:]))
-
-	if (len(frame) < 15) {
-		padding := make([]byte, 15-len(frame))
-		frame = append(frame, padding...)
-	}
-
-	debug.PrintLog("Frame construído: %v\n", frame)
-
-	return frame
 }
 
-func SendMessage(sock int, content string, sequence uint8, packetType uint8) (int, error) {
-	frame := buildMessage(content, sequence, packetType)
+func SendMessage(sock int, packet Message) (int, error) {
+	frame := packet.toBytes()
 
 	n, err := syscall.Write(sock, frame)
 
@@ -128,7 +159,7 @@ func AttemptSendMessage(sock int, packet Message) error {
 
 	err := error(nil)
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		n, err := SendMessage(sock, packet.Content, packet.Sequence, PacketTypeData)
+		n, err := SendMessage(sock, packet)
 		if err != nil {
 			return fmt.Errorf("falha ao enviar mensagem: %w", err)
 		}
@@ -143,7 +174,7 @@ func AttemptSendMessage(sock int, packet Message) error {
 
 		if errors.Is(err, ErrTimeout) {
 			fmt.Printf("Sem ACK dentro de %dms; reenviando...\n", timeoutMillis)
-			timeoutMillis *= 2
+			timeoutMillis = min(timeoutMillis*2, maxTimeoutMillis)
 			continue
 		}
 
@@ -153,8 +184,8 @@ func AttemptSendMessage(sock int, packet Message) error {
 	return fmt.Errorf("falha ao obter ACK: limite de tentativas atingido: %w", err)
 }
 
-func ReadPacket(buf []byte, n int) (Message, error) {
-	if n < 4 {
+func ReadPacket(buf []byte) (Message, error) {
+	if len(buf) < 4 {
 		return Message{}, fmt.Errorf("pacote muito curto")
 	}
 
@@ -164,31 +195,29 @@ func ReadPacket(buf []byte, n int) (Message, error) {
 	}
 
 	size := (buf[1] >> 3)
-	if int(size) > n-4 {
-		return Message{}, fmt.Errorf("tamanho declarado maior que o recebido")
+	bufferUsable := buf[1:4+size]
+	crcValue := bufferUsable[2+size]
+
+	msg := Message{
+		Content:    string(bufferUsable[2 : 2 + size]),
+		Sequence:   ((bufferUsable[0] & 0x07) << 3) | (bufferUsable[1] >> 5),
+		PacketType: bufferUsable[1] & 0x1F,
 	}
 
-	msgLen := 4 + int(size)
-	msg := buf[:msgLen]
+	// validar numero de sequência
+	if msg.Sequence != ServerState.SequenceNumber {
+		return Message{}, fmt.Errorf("sequencia inesperada: esperado %d, recebido %d", ServerState.SequenceNumber, msg.Sequence)
+	}
+	ServerState.addSequence()
 
-	sequence := ((msg[1] & 0x07) << 3) | (msg[2] >> 5)
-	packetType := msg[2] & 0x1F
+	fmt.Printf("Mensagem capturada (CRC: %d): %s\n", crcValue, msg.String())
+	debug.PrintLog("Conteudo mensagem: %v\n", msg.Content)
 
-	content := string(msg[3 : 3+size])
-	crcValue := msg[3+size]
-
-	fmt.Printf("Pacote capturado (%d bytes): [tam: %v | seq: %v | tipo: %v | crc: %v]\n", n, size, sequence, packetType, crcValue)
-	debug.PrintLog("Mensagem: %v\n", msg)
-
-	if !crc.VerifyCRC(msg[1:3+size], crcValue) {
+	if !crc.VerifyCRC(bufferUsable[:2+size], crcValue) {
 		return Message{}, fmt.Errorf("CRC invalido")
 	}
 
-	return Message{
-		Content:    content,
-		Sequence:   sequence,
-		PacketType: packetType,
-	}, nil
+	return msg, nil
 }
 
 func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
@@ -214,7 +243,7 @@ func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
 			return Message{}, fmt.Errorf("falha ao configurar timeout do socket: %w", err)
 		}
 
-		n, addr, err := syscall.Recvfrom(sock, buf, 0)
+		_, addr, err := syscall.Recvfrom(sock, buf, 0)
 		if err != nil {
 			if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EINTR) {
 				continue
@@ -227,7 +256,7 @@ func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
 			continue
 		}
 
-		msg, err := ReadPacket(buf, n)
+		msg, err := ReadPacket(buf)
 		if err != nil {
 			debug.PrintLog("Pacote ignorado durante espera: %v\n", err)
 			continue
