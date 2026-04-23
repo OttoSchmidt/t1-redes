@@ -83,7 +83,6 @@ func (m Message) toBytes() []byte {
 
 type State struct {
 	SequenceNumber    uint8
-	LastSentMessage   Message
 }
 
 func (s *State) addSequence() {
