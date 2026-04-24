@@ -23,27 +23,13 @@ func main() {
 		panic(err)
 	}
 
-	buf := make([]byte, 36)
+	buf := make([]byte, 256)
 
 	fmt.Println("Servidor iniciado. Esperando mensagens...")
 	for {
-		_, addr, err := syscall.Recvfrom(sock, buf, 0)
+		msg, err := rawsockets.ReceivePacket(sock, buf)
 		if err != nil {
-			panic(err)
-		}
-
-		if llAddr, ok := addr.(*syscall.SockaddrLinklayer); ok && llAddr.Pkttype == syscall.PACKET_OUTGOING {
-			// Ignora pacotes enviados. eles aparecem no loopback,
-			// mas não em interfaces físicas.
-			continue
-		}
-
-		msg, err := rawsockets.ReadPacket(buf)
-		if err != nil {
-			if err != rawsockets.ErrInvalidStartMarker {
-				debug.PrintLog("Erro ao ler mensagem: %v\n", err)
-			}
-				
+			debug.PrintLog("Erro ao receber pacote: %v\n", err)
 			continue
 		}
 
@@ -54,12 +40,12 @@ func main() {
 			continue
 		case rawsockets.PacketTypeData:
 			reply := rawsockets.CreateMessage("", rawsockets.PacketTypeAck)
-			if _, err := rawsockets.SendMessage(sock, reply); err != nil {
+			if err := rawsockets.SendMessage(sock, reply); err != nil {
 				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
 			}
 		default:
 			reply := rawsockets.CreateMessage("", rawsockets.PacketTypeNack)
-			if _, err := rawsockets.SendMessage(sock, reply); err != nil {
+			if err := rawsockets.SendMessage(sock, reply); err != nil {
 				debug.PrintLog("Erro ao enviar NACK: %v\n", err)
 			}
 		}

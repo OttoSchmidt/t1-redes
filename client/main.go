@@ -24,7 +24,7 @@ func main() {
 
 	for i := 0; i < 10; i++ {
 		msg := rawsockets.CreateMessage(fmt.Sprintf("PACMAN-TEST-PACKET-%d", i), rawsockets.PacketTypeData)
-		err = rawsockets.AttemptSendMessage(sock, msg)
+		err = rawsockets.SendMessage(sock, msg)
 		if err != nil {
 			panic(err)
 		}
