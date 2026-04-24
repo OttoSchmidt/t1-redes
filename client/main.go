@@ -23,7 +23,7 @@ func main() {
 	defer syscall.Close(sock)
 
 	for i := 0; i < 10; i++ {
-		msg := rawsockets.CreateMessage(fmt.Sprintf("PACMAN-TEST-PACKET-%d", i), rawsockets.PacketTypeData)
+		msg := rawsockets.CreateMessage(fmt.Sprintf("PACMAN-TEST-PACKET-%d-aaaaaaaaaaaaa", i), rawsockets.Data)
 		err = rawsockets.SendMessage(sock, msg)
 		if err != nil {
 			panic(err)

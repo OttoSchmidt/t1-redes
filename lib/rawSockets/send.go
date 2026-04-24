@@ -22,7 +22,7 @@ Envia a mensagem pelo socket especificado. Se o tipo da mensagem for ACK, NACK o
 Para outros tipos, implementa um mecanismo de retransmissão com timeout e limite de tentativas, aguardando alguma resposta.
 */
 func SendMessage(sock int, packet Message) error {
-	if (packet.PacketType == PacketTypeAck || packet.PacketType == PacketTypeNack || packet.PacketType == PacketTypeError) {
+	if (packet.PacketType == Ack || packet.PacketType == Nack || packet.PacketType == Error) {
 		err := sendPacket(sock, packet)
 		if err != nil {
 			return fmt.Errorf("falha ao enviar mensagem: %w", err)
@@ -40,11 +40,11 @@ func SendMessage(sock int, packet Message) error {
 
 			fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, maxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
 
-			msg, err := ReceivePacketTypeWithTimeout(sock, timeoutMillis, PacketTypeAck)
+			msg, err := ReceivePacketTWithTimeout(sock, timeoutMillis, Ack)
 			
 			switch {
 			case errors.Is(err, ErrUnexpectedPacketType):
-				if msg.PacketType == PacketTypeNack {
+				if msg.PacketType == Nack {
 					// reenviar a mensagem, resetando o numero de tentativas
 					attempt = 1
 					continue

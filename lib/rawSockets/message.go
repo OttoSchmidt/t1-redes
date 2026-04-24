@@ -10,21 +10,22 @@ import (
 
 const startMarker = 0x7E
 
+type PacketT uint8
 const (
-	PacketTypeAck       uint8 = 0
-	PacketTypeNack      uint8 = 1
-	PacketTypeVisualize uint8 = 2
-	PacketTypeInit      uint8 = 3
-	PacketTypeData      uint8 = 4
-	PacketTypeTxtFile   uint8 = 5
-	PacketTypeJpgFile   uint8 = 6
-	PacketTypeMp4File   uint8 = 7
-	PacketTypeMoveRight uint8 = 10
-	PacketTypeMoveLeft  uint8 = 11
-	PacketTypeMoveUp    uint8 = 12
-	PacketTypeMoveDown  uint8 = 13
-	PacketTypeError     uint8 = 15
-	PacketTypeEnd	    uint8 = 16
+	Ack       PacketT = 0
+	Nack      PacketT = 1
+	Visualize PacketT = 2
+	Init      PacketT = 3
+	Data      PacketT = 4
+	TxtFile   PacketT = 5
+	JpgFile   PacketT = 6
+	Mp4File   PacketT = 7
+	MoveRight PacketT = 10
+	MoveLeft  PacketT = 11
+	MoveUp    PacketT = 12
+	MoveDown  PacketT = 13
+	Error     PacketT = 15
+	End	      PacketT = 16
 )
 
 const maxAttempts = 50
@@ -42,7 +43,7 @@ func (s *State) addSequence() {
 type Message struct {
 	Content    string
 	Sequence   uint8
-	PacketType uint8
+	PacketType PacketT
 }
 
 func (m Message) String() string {
@@ -75,7 +76,7 @@ func (m Message) toBytes() []byte {
 	frame = append(frame, byte((size&0x1F)<<3|(sequence&0x38)>>3))
 
 	// terceiro byte: últimos 3 bits da sequência + 5 bits de tipo
-	frame = append(frame, byte((sequence&0x07)<<5)|(m.PacketType&0x1F))
+	frame = append(frame, byte((sequence&0x07)<<5)|(uint8(m.PacketType)&0x1F))
 
 	frame = append(frame, payload...)
 
@@ -103,7 +104,7 @@ var ServerState = State{}
 Cria uma nova mensagem com o conteúdo e tipo especificados. O número de sequência é
 incrementado a cada mensagem criada e lida, garantindo sincronia entre remetente e destinatário. 
 */
-func CreateMessage(content string, packetType uint8) Message {
+func CreateMessage(content string, PacketT PacketT) Message {
 	// incrementar o numero de sequência para a próxima mensagem
 	// após a função retornar
 	defer ServerState.addSequence()
@@ -111,7 +112,7 @@ func CreateMessage(content string, packetType uint8) Message {
 	return Message{
 		Content: content,
 		Sequence: ServerState.SequenceNumber,
-		PacketType: packetType,
+		PacketType: PacketT,
 	}
 }
 
@@ -130,7 +131,7 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 
 	size := (buf[1] >> 3)
 	if n < int(4+size) {
-		return Message{}, fmt.Errorf("pacote muito curto")
+		return Message{}, fmt.Errorf("pacote muito curto (esperado: %d, recebido: %d)", 4+size, n)
 	}
 
 	bufferUsable := buf[1:4+size]
@@ -139,7 +140,7 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	msg := Message{
 		Content:    string(bufferUsable[2 : 2 + size]),
 		Sequence:   ((bufferUsable[0] & 0x07) << 3) | (bufferUsable[1] >> 5),
-		PacketType: bufferUsable[1] & 0x1F,
+		PacketType: PacketT(bufferUsable[1] & 0x1F),
 	}
 
 	// validar numero de sequência

@@ -74,7 +74,7 @@ func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
 /*
 Recebe um pacote do socket, aguardando um tempo máximo especificado (timeout) e filtrando por um tipo especifico.
 */
-func ReceivePacketTypeWithTimeout(sock int, timeoutMillis int, expectedType uint8) (Message, error) {
+func ReceivePacketTWithTimeout(sock int, timeoutMillis int, expectedType PacketT) (Message, error) {
 	deadline := time.Now().Add(time.Duration(timeoutMillis) * time.Millisecond)
 
 	remaining := time.Until(deadline)
