@@ -77,24 +77,23 @@ Recebe um pacote do socket, aguardando um tempo máximo especificado (timeout) e
 func ReceivePacketTypeWithTimeout(sock int, timeoutMillis int, expectedType uint8) (Message, error) {
 	deadline := time.Now().Add(time.Duration(timeoutMillis) * time.Millisecond)
 
-	for {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return Message{}, ErrTimeout
-		}
-
-		msg, err := ReceivePacketWithTimeout(sock, int(remaining/time.Millisecond))
-		switch {
-		case errors.Is(err, ErrTimeout):
-			return Message{}, ErrTimeout
-		case err != nil:
-			return Message{}, err
-		}
-
-		if msg.PacketType != expectedType {
-			return msg, ErrUnexpectedPacketType
-		}
-
-		return msg, nil
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return Message{}, ErrTimeout
 	}
+
+	msg, err := ReceivePacketWithTimeout(sock, int(remaining/time.Millisecond))
+	switch {
+	case errors.Is(err, ErrTimeout):
+		return Message{}, ErrTimeout
+	case err != nil:
+		return Message{}, err
+	}
+
+	if msg.PacketType != expectedType {
+		return msg, ErrUnexpectedPacketType
+	}
+
+	return msg, nil
+	
 }
