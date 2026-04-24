@@ -16,7 +16,7 @@ func htons(v uint16) uint16 {
 	return (v<<8)&0xff00 | v>>8
 }
 
-func CreateRawSocket(ifaceName string) (int, error) {
+func CreateSocket(ifaceName string) (int, error) {
 	// verificar se interface existe
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {

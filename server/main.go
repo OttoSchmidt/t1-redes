@@ -17,7 +17,7 @@ func main() {
 		ifaceName = os.Args[1]
 	}
 
-	sock, err := rawsockets.CreateRawSocket(ifaceName)
+	sock, err := rawsockets.CreateSocket(ifaceName)
 	defer syscall.Close(sock)
 	if err != nil {
 		panic(err)

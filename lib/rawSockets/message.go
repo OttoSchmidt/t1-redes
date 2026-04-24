@@ -3,18 +3,12 @@ package rawsockets
 import (
 	"errors"
 	"fmt"
-	"syscall"
-	"time"
 
 	crc "pacman-redes/lib/crc"
 	debug "pacman-redes/lib/debug"
 )
 
 const startMarker = 0x7E
-
-const maxAttempts = 50
-const initialTimeoutMillis = 500
-const maxTimeoutMillis = 4000
 
 const (
 	PacketTypeAck       uint8 = 0
@@ -32,6 +26,18 @@ const (
 	PacketTypeError     uint8 = 15
 	PacketTypeEnd	    uint8 = 16
 )
+
+const maxAttempts = 50
+const initialTimeoutMillis = 500
+const maxTimeoutMillis = 4000
+
+type State struct {
+	SequenceNumber    uint8
+}
+
+func (s *State) addSequence() {
+	s.SequenceNumber = (s.SequenceNumber + 1) % 64
+}
 
 type Message struct {
 	Content    string
@@ -86,14 +92,6 @@ func (m Message) toBytes() []byte {
 	return frame
 }
 
-type State struct {
-	SequenceNumber    uint8
-}
-
-func (s *State) addSequence() {
-	s.SequenceNumber = (s.SequenceNumber + 1) % 64
-}
-
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")
 var ErrNackReceived = errors.New("NACK recebido")
 var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
@@ -114,64 +112,6 @@ func CreateMessage(content string, packetType uint8) Message {
 		Content: content,
 		Sequence: ServerState.SequenceNumber,
 		PacketType: packetType,
-	}
-}
-
-/*
-Envia a mensagem pelo socket especificado. Não possui timeout, retransmissão ou verificação de resposta.
-*/
-func sendPacket(sock int, packet Message) error {
-	frame := packet.toBytes()
-
-	_, err := syscall.Write(sock, frame)
-
-	return err
-}
-
-/*
-Envia a mensagem pelo socket especificado. Se o tipo da mensagem for ACK, NACK ou Error, é enviada sem aguardar resposta.
-Para outros tipos, implementa um mecanismo de retransmissão com timeout e limite de tentativas, aguardando alguma resposta.
-*/
-func SendMessage(sock int, packet Message) error {
-	if (packet.PacketType == PacketTypeAck || packet.PacketType == PacketTypeNack || packet.PacketType == PacketTypeError) {
-		err := sendPacket(sock, packet)
-		if err != nil {
-			return fmt.Errorf("falha ao enviar mensagem: %w", err)
-		}
-
-		return nil
-	} else {
-		timeoutMillis := initialTimeoutMillis
-
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			err := sendPacket(sock, packet)
-			if err != nil {
-				return fmt.Errorf("falha ao enviar mensagem: %w", err)
-			}
-
-			fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, maxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
-
-			_, err = ReceivePacketTypeWithTimeout(sock, timeoutMillis, PacketTypeAck)
-			
-			switch {
-			case errors.Is(err, ErrNackReceived):
-				fmt.Printf("NACK recebido; reenviando...\n")
-				// reenviar a mensagem, resetando o numero de tentativas
-				defer SendMessage(sock, packet)
-				return nil
-			case errors.Is(err, ErrTimeout):
-				fmt.Printf("Sem resposta dentro de %dms; reenviando...\n", timeoutMillis)
-				timeoutMillis = min(timeoutMillis*2, maxTimeoutMillis)
-				continue
-			case err == nil:
-				fmt.Printf("ACK recebido\n")
-				return nil
-			default:
-				return fmt.Errorf("erro ao aguardar ACK: %w", err)
-			}
-		}
-
-		return fmt.Errorf("falha ao obter ACK: limite de tentativas atingido")
 	}
 }
 
@@ -212,94 +152,4 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	}
 
 	return msg, nil
-}
-
-/*
-Recebe um pacote do socket, aguardando indefinidamente
-*/
-func ReceivePacket(sock int, buf []byte) (Message, error) {
-	_, addr, err := syscall.Recvfrom(sock, buf, 0)
-	if err != nil {
-		panic(err)
-	}
-
-	if llAddr, ok := addr.(*syscall.SockaddrLinklayer); ok && llAddr.Pkttype == syscall.PACKET_OUTGOING {
-		// Ignora pacotes enviados. eles aparecem no loopback,
-		// mas não em interfaces físicas.
-		return Message{}, fmt.Errorf("pacote ignorado")
-	}
-
-	msg, err := ReadMessage(buf, n)
-	if err != nil {
-		if err != ErrInvalidStartMarker {
-			debug.PrintLog("Erro ao ler mensagem: %v\n", err)
-		}
-			
-		return Message{}, err
-	}
-
-	return msg, nil
-}
-
-/*
-Recebe um pacote do socket, aguardando um tempo máximo especificado (timeout)
-*/
-func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
-	if timeoutMillis <= 0 {
-		return Message{}, fmt.Errorf("timeout invalido: %d", timeoutMillis)
-	}
-
-	deadline := time.Now().Add(time.Duration(timeoutMillis) * time.Millisecond)
-	buf := make([]byte, 256)
-
-	for {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return Message{}, ErrTimeout
-		}
-
-		if remaining > 150*time.Millisecond {
-			remaining = 150 * time.Millisecond
-		}
-
-		tv := syscall.NsecToTimeval(remaining.Nanoseconds())
-		if err := syscall.SetsockoptTimeval(sock, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv); err != nil {
-			return Message{}, fmt.Errorf("falha ao configurar timeout do socket: %w", err)
-		}
-
-		msg, err := ReceivePacket(sock, buf)
-
-		return msg, err
-	}
-}
-
-/*
-Recebe um pacote do socket, aguardando um tempo máximo especificado (timeout) e filtrando por um tipo especifico.
-*/
-func ReceivePacketTypeWithTimeout(sock int, timeoutMillis int, expectedType uint8) (Message, error) {
-	deadline := time.Now().Add(time.Duration(timeoutMillis) * time.Millisecond)
-
-	for {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return Message{}, ErrTimeout
-		}
-
-		msg, err := ReceivePacketWithTimeout(sock, int(remaining/time.Millisecond))
-		switch {
-		case errors.Is(err, ErrTimeout):
-			return Message{}, ErrTimeout
-		case errors.Is(err, ErrNackReceived):
-			return Message{}, ErrNackReceived
-		case err != nil:
-			return Message{}, err
-		}
-
-		if msg.PacketType != expectedType {
-			debug.PrintLog("Pacote tipo %d ignorado; aguardando tipo %d\n", msg.PacketType, expectedType)
-			continue
-		}
-
-		return msg, nil
-	}
 }
