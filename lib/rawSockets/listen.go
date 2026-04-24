@@ -13,9 +13,9 @@ import (
 Recebe um pacote do socket, aguardando indefinidamente
 */
 func ReceivePacket(sock int, buf []byte) (Message, error) {
-	_, addr, err := syscall.Recvfrom(sock, buf, 0)
+	n, addr, err := syscall.Recvfrom(sock, buf, 0)
 	if err != nil {
-		panic(err)
+		return Message{}, fmt.Errorf("falha ao receber pacote: %w", err)
 	}
 
 	if llAddr, ok := addr.(*syscall.SockaddrLinklayer); ok && llAddr.Pkttype == syscall.PACKET_OUTGOING {
@@ -63,6 +63,9 @@ func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
 		}
 
 		msg, err := ReceivePacket(sock, buf)
+		if err != nil {
+			continue
+		}
 
 		return msg, err
 	}
@@ -84,15 +87,12 @@ func ReceivePacketTypeWithTimeout(sock int, timeoutMillis int, expectedType uint
 		switch {
 		case errors.Is(err, ErrTimeout):
 			return Message{}, ErrTimeout
-		case errors.Is(err, ErrNackReceived):
-			return Message{}, ErrNackReceived
 		case err != nil:
 			return Message{}, err
 		}
 
 		if msg.PacketType != expectedType {
-			debug.PrintLog("Pacote tipo %d ignorado; aguardando tipo %d\n", msg.PacketType, expectedType)
-			continue
+			return msg, ErrUnexpectedPacketType
 		}
 
 		return msg, nil
