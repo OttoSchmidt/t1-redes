@@ -40,14 +40,15 @@ func SendMessage(sock int, packet Message) error {
 
 			fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, maxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
 
-			_, err = ReceivePacketTypeWithTimeout(sock, timeoutMillis, PacketTypeAck)
+			msg, err := ReceivePacketTypeWithTimeout(sock, timeoutMillis, PacketTypeAck)
 			
 			switch {
-			case errors.Is(err, ErrNackReceived):
-				fmt.Printf("NACK recebido; reenviando...\n")
-				// reenviar a mensagem, resetando o numero de tentativas
-				defer SendMessage(sock, packet)
-				return nil
+			case errors.Is(err, ErrUnexpectedPacketType):
+				if msg.PacketType == PacketTypeNack {
+					// reenviar a mensagem, resetando o numero de tentativas
+					attempt = 1
+					continue
+				}
 			case errors.Is(err, ErrTimeout):
 				fmt.Printf("Sem resposta dentro de %dms; reenviando...\n", timeoutMillis)
 				timeoutMillis = min(timeoutMillis*2, maxTimeoutMillis)

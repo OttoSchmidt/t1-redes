@@ -93,8 +93,8 @@ func (m Message) toBytes() []byte {
 }
 
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")
-var ErrNackReceived = errors.New("NACK recebido")
 var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
+var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
 
 var ServerState = State{}
 
@@ -129,6 +129,10 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	}
 
 	size := (buf[1] >> 3)
+	if n < int(4+size) {
+		return Message{}, fmt.Errorf("pacote muito curto")
+	}
+
 	bufferUsable := buf[1:4+size]
 	crcValue := bufferUsable[2+size]
 
@@ -142,7 +146,6 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	if msg.Sequence != ServerState.SequenceNumber {
 		return Message{}, fmt.Errorf("sequencia inesperada: esperado %d, recebido %d", ServerState.SequenceNumber, msg.Sequence)
 	}
-	ServerState.addSequence()
 
 	fmt.Printf("Mensagem capturada (CRC: %d): %s\n", crcValue, msg.String())
 	debug.PrintLog("Conteudo mensagem: %v\n", msg.Content)
@@ -150,6 +153,9 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	if !crc.VerifyCRC(bufferUsable[:2+size], crcValue) {
 		return Message{}, fmt.Errorf("CRC invalido")
 	}
+
+	// tudo certo, incrementar o numero de sequência para a próxima mensagem
+	ServerState.addSequence()
 
 	return msg, nil
 }
