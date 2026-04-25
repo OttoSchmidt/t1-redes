@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -29,7 +30,14 @@ func main() {
 	for {
 		msg, err := rawsockets.ReceivePacket(sock, buf)
 		if err != nil {
-			debug.PrintLog("Erro ao receber pacote: %v\n", err)
+			if errors.Is(err, rawsockets.ErrDuplicatePacket) {
+				// pacote duplicado (retransmissão após ACK perdido): reenviar último ACK/NACK
+				if resendErr := rawsockets.ResendLastSent(sock); resendErr != nil {
+					debug.PrintLog("Erro ao reenviar resposta para pacote duplicado: %v\n", resendErr)
+				}
+			} else {
+				debug.PrintLog("Erro ao receber pacote: %v\n", err)
+			}
 			continue
 		}
 

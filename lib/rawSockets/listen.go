@@ -67,6 +67,7 @@ func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
 			switch {
 			case errors.Is(err, ErrIgnoredPacket),
 				errors.Is(err, ErrInvalidStartMarker),
+				errors.Is(err, ErrDuplicatePacket),
 				errors.Is(err, syscall.EAGAIN),
 				errors.Is(err, syscall.EWOULDBLOCK),
 				errors.Is(err, syscall.EINTR):

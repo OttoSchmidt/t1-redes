@@ -33,7 +33,10 @@ const initialTimeoutMillis = 500
 const maxTimeoutMillis = 4000
 
 type State struct {
-	SequenceNumber    uint8
+	SequenceNumber  uint8
+	lastReceivedSeq uint8
+	hasReceivedPkt  bool
+	lastSentBytes   []byte
 }
 
 func (s *State) addSequence() {
@@ -97,6 +100,7 @@ var ErrTimeout = errors.New("timeout aguardando mensagem valida")
 var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
 var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
 var ErrIgnoredPacket = errors.New("pacote ignorado")
+var ErrDuplicatePacket = errors.New("pacote duplicado (retransmissão)")
 
 var ServerState = State{}
 
@@ -144,6 +148,11 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 		PacketType: PacketT(bufferUsable[1] & 0x1F),
 	}
 
+	// detectar retransmissão: sequência igual à última recebida com sucesso
+	if ServerState.hasReceivedPkt && msg.Sequence == ServerState.lastReceivedSeq {
+		return msg, ErrDuplicatePacket
+	}
+
 	// validar numero de sequência
 	if msg.Sequence != ServerState.SequenceNumber {
 		return Message{}, fmt.Errorf("sequencia inesperada: esperado %d, recebido %d", ServerState.SequenceNumber, msg.Sequence)
@@ -156,7 +165,9 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 		return Message{}, fmt.Errorf("CRC invalido")
 	}
 
-	// tudo certo, incrementar o numero de sequência para a próxima mensagem
+	// tudo certo, registrar sequência recebida e incrementar para a próxima mensagem
+	ServerState.lastReceivedSeq = msg.Sequence
+	ServerState.hasReceivedPkt = true
 	ServerState.addSequence()
 
 	return msg, nil

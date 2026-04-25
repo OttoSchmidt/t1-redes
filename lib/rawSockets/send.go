@@ -12,8 +12,22 @@ Envia a mensagem pelo socket especificado. Não possui timeout, retransmissão o
 func sendPacket(sock int, packet Message) error {
 	frame := packet.toBytes()
 
+	ServerState.lastSentBytes = append([]byte(nil), frame...)
+
 	_, err := syscall.Write(sock, frame)
 
+	return err
+}
+
+/*
+Reenvia os bytes da última mensagem enviada pelo socket especificado. Útil para reenviar ACK/NACK
+após receber um pacote duplicado (retransmissão do remetente).
+*/
+func ResendLastSent(sock int) error {
+	if len(ServerState.lastSentBytes) == 0 {
+		return fmt.Errorf("nenhuma mensagem enviada anteriormente")
+	}
+	_, err := syscall.Write(sock, ServerState.lastSentBytes)
 	return err
 }
 
