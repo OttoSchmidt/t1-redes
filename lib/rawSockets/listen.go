@@ -21,7 +21,7 @@ func ReceivePacket(sock int, buf []byte) (Message, error) {
 	if llAddr, ok := addr.(*syscall.SockaddrLinklayer); ok && llAddr.Pkttype == syscall.PACKET_OUTGOING {
 		// Ignora pacotes enviados. eles aparecem no loopback,
 		// mas não em interfaces físicas.
-		return Message{}, fmt.Errorf("pacote ignorado")
+		return Message{}, ErrIgnoredPacket
 	}
 
 	msg, err := ReadMessage(buf, n)
@@ -64,10 +64,19 @@ func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
 
 		msg, err := ReceivePacket(sock, buf)
 		if err != nil {
-			continue
+			switch {
+			case errors.Is(err, ErrIgnoredPacket),
+				errors.Is(err, ErrInvalidStartMarker),
+				errors.Is(err, syscall.EAGAIN),
+				errors.Is(err, syscall.EWOULDBLOCK),
+				errors.Is(err, syscall.EINTR):
+				continue
+			default:
+				return Message{}, err
+			}
 		}
 
-		return msg, err
+		return msg, nil
 	}
 }
 

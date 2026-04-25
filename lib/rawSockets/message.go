@@ -96,6 +96,7 @@ func (m Message) toBytes() []byte {
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")
 var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
 var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
+var ErrIgnoredPacket = errors.New("pacote ignorado")
 
 var ServerState = State{}
 
