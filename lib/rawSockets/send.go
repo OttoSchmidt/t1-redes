@@ -46,7 +46,8 @@ func SendMessage(sock int, packet Message) error {
 			case errors.Is(err, ErrUnexpectedPacketType):
 				if msg.PacketType == Nack {
 					// reenviar a mensagem, resetando o numero de tentativas
-					attempt = 1
+					timeoutMillis = initialTimeoutMillis
+					attempt = 0
 					continue
 				}
 			case errors.Is(err, ErrTimeout):
