@@ -10,7 +10,7 @@ import (
 Envia a mensagem pelo socket especificado. Não possui timeout, retransmissão ou verificação de resposta.
 */
 func sendPacket(sock int, packet Message) error {
-	frame := packet.toBytes()
+	frame := packet.ToBytes()
 
 	ServerState.lastSentBytes = append([]byte(nil), frame...)
 
@@ -46,13 +46,13 @@ func SendMessage(sock int, packet Message) error {
 	} else {
 		timeoutMillis := initialTimeoutMillis
 
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
+		for attempt := 1; attempt <= MaxAttempts; attempt++ {
 			err := sendPacket(sock, packet)
 			if err != nil {
 				return fmt.Errorf("falha ao enviar mensagem: %w", err)
 			}
 
-			fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, maxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
+			fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, MaxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
 
 			msg, err := ReceivePacketTWithTimeout(sock, timeoutMillis, Ack)
 			
