@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -17,47 +18,42 @@ func main() {
 		ifaceName = os.Args[1]
 	}
 
-	sock, err := rawsockets.CreateRawSocket(ifaceName)
+	sock, err := rawsockets.CreateSocket(ifaceName)
 	defer syscall.Close(sock)
 	if err != nil {
 		panic(err)
 	}
 
-	buf := make([]byte, 36)
+	buf := make([]byte, 256)
 
 	fmt.Println("Servidor iniciado. Esperando mensagens...")
 	for {
-		n, addr, err := syscall.Recvfrom(sock, buf, 0)
+		msg, err := rawsockets.ReceivePacket(sock, buf)
 		if err != nil {
-			panic(err)
-		}
-
-		if llAddr, ok := addr.(*syscall.SockaddrLinklayer); ok && llAddr.Pkttype == syscall.PACKET_OUTGOING {
-			// Ignora pacotes enviados. eles aparecem no loopback,
-			// mas não em interfaces físicas.
-			continue
-		}
-
-		msg, err := rawsockets.ReadPacket(buf, n)
-		if err != nil {
-			if err != rawsockets.ErrInvalidStartMarker {
-				debug.PrintLog("Erro ao ler mensagem: %v\n", err)
+			if errors.Is(err, rawsockets.ErrDuplicatePacket) {
+				// pacote duplicado (retransmissão após ACK perdido): reenviar último ACK/NACK
+				if resendErr := rawsockets.ResendLastSent(sock); resendErr != nil {
+					debug.PrintLog("Erro ao reenviar resposta para pacote duplicado: %v\n", resendErr)
+				}
+			} else {
+				debug.PrintLog("Erro ao receber pacote: %v\n", err)
 			}
-				
 			continue
 		}
 
 		fmt.Printf("Conteúdo: %s\n\n", msg.Content)
 
 		switch msg.PacketType {
-		case rawsockets.PacketTypeAck, rawsockets.PacketTypeNack:
+		case rawsockets.Ack, rawsockets.Nack:
 			continue
-		case rawsockets.PacketTypeData:
-			if _, err := rawsockets.SendMessage(sock, "ACK", msg.Sequence, rawsockets.PacketTypeAck); err != nil {
+		case rawsockets.Data:
+			reply := rawsockets.CreateMessage("", rawsockets.Ack)
+			if err := rawsockets.SendMessage(sock, reply); err != nil {
 				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
 			}
 		default:
-			if _, err := rawsockets.SendMessage(sock, "NACK", msg.Sequence, rawsockets.PacketTypeNack); err != nil {
+			reply := rawsockets.CreateMessage("", rawsockets.Nack)
+			if err := rawsockets.SendMessage(sock, reply); err != nil {
 				debug.PrintLog("Erro ao enviar NACK: %v\n", err)
 			}
 		}
