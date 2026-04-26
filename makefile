@@ -2,7 +2,9 @@ SERVER_BIN=pacman_server
 CLIENT_BIN=pacman_client
 GO=go
 
-.PHONY: all debug client server clean
+.PHONY: all debug client server test dist clean
+
+TEST_FILES=lib/rawSockets/tests/*.go
 
 BUILD_FLAGS?=
 
@@ -16,6 +18,15 @@ client:
 
 server:
 	$(GO) build $(BUILD_FLAGS) -o $(SERVER_BIN) server/main.go	
+
+test:
+	$(GO) test -v $(TEST_FILES)
+
+dist:
+	mkdir -p dist
+	cp -r client/ lib/ server/ makefile go.mod go.sum dist/
+	tar -czvf pacman-redes.tar.gz dist/
+	rm -rf dist
 
 clean:
 	rm -f $(SERVER_BIN) $(CLIENT_BIN)

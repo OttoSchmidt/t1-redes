@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 
@@ -15,15 +16,17 @@ func main() {
 		ifaceName = os.Args[1]
 	}
 
-	sock, err := rawsockets.CreateRawSocket(ifaceName)
+	sock, err := rawsockets.CreateSocket(ifaceName)
 	if err != nil {
 		panic(err)
 	}
 	defer syscall.Close(sock)
 
-	rawsockets.AttemptSendMessage(sock, rawsockets.Message{
-		Content:    "PACMAN-TEST-PACKET",
-		Sequence:   rawsockets.SequenceNumber,
-		PacketType: rawsockets.PacketTypeData,
-	})
+	for i := 0; i < 10; i++ {
+		msg := rawsockets.CreateMessage(fmt.Sprintf("PACMAN-TEST-PACKET-%d-aaaaaaaaaaaaa", i), rawsockets.Data)
+		err = rawsockets.SendMessage(sock, msg)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
