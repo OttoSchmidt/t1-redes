@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	crc "pacman-redes/lib/crc"
 	rawsockets "pacman-redes/lib/rawSockets"
 )
 
@@ -88,6 +89,28 @@ func TestDuplicateSequence(t *testing.T) {
 	}
 }
 
+func TestDuplicateSequenceWithInvalidCRC(t *testing.T) {
+	defer rawsockets.ServerState.Reset()
+
+	msg := rawsockets.CreateMessage("abc", rawsockets.Data)
+	packet := msg.ToBytes()
+	rawsockets.ServerState.Reset()
+
+	// primeira leitura válida, para registrar o último pacote recebido
+	if _, err := rawsockets.ReadMessage(packet, len(packet)); err != nil {
+		t.Fatalf("Teste falhou: erro ao ler primeira mensagem: %v\n", err)
+	}
+
+	// corrompe o CRC exato do pacote duplicado
+	crcIndex := 3 + len(msg.Content)
+	packet[crcIndex] ^= 0xFF
+
+	_, err := rawsockets.ReadMessage(packet, len(packet))
+	if !errors.Is(err, rawsockets.ErrInvalidCRC) {
+		t.Fatalf("Teste falhou: esperado ErrInvalidCRC para pacote duplicado corrompido, obtido: %v\n", err)
+	}
+}
+
 func TestFutureSequence(t *testing.T) {
 	defer rawsockets.ServerState.Reset()
 
@@ -98,9 +121,14 @@ func TestFutureSequence(t *testing.T) {
 	// simula recebimento de uma mensagem com sequência futura (não a próxima esperada)
 	nextSequence := (msg.Sequence + 2) % 64
 	packet[1] = (packet[1] & 0xF8) | (nextSequence >> 3)
-	packet[2] = (nextSequence << 5) & 0xE0 | (packet[2] & 0x1F)
+	packet[2] = (nextSequence<<5)&0xE0 | (packet[2] & 0x1F)
 
-	_, err := rawsockets.ReadMessage(packet, len(packet))	
+	// após alterar cabeçalho, recalcula CRC para isolar a validação de sequência
+	size := len(msg.Content)
+	crcIndex := 3 + size
+	packet[crcIndex] = crc.CalculateCRC(packet[1 : 3+size])
+
+	_, err := rawsockets.ReadMessage(packet, len(packet))
 	if err == nil {
 		t.Fatal("Teste de sequência futura falhou: mensagem lida sem erro, apesar da sequência inesperada")
 	}
