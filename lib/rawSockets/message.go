@@ -28,7 +28,7 @@ const (
 	End	      PacketT = 16
 )
 
-const maxAttempts = 50
+var MaxAttempts = 50     // nao eh const para facilitar testes
 const initialTimeoutMillis = 500
 const maxTimeoutMillis = 4000
 
@@ -41,6 +41,14 @@ type State struct {
 
 func (s *State) addSequence() {
 	s.SequenceNumber = (s.SequenceNumber + 1) % 64
+}
+
+// necessario para os testes
+func (s *State) Reset() {
+	s.SequenceNumber = 0
+	s.lastReceivedSeq = 0
+	s.hasReceivedPkt = false
+	s.lastSentBytes = nil
 }
 
 type Message struct {
@@ -59,7 +67,7 @@ func (m Message) Size() int {
 }
 
 // Controi um array de bytes representando a mensagem a ser enviada
-func (m Message) toBytes() []byte {
+func (m Message) ToBytes() []byte {
 	frame := []byte{
 		startMarker, // marcador de inicio
 	}
@@ -98,9 +106,11 @@ func (m Message) toBytes() []byte {
 
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")
 var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
+var ErrUnexpectedSequence = errors.New("sequência inesperada")
 var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
 var ErrIgnoredPacket = errors.New("pacote ignorado")
 var ErrDuplicatePacket = errors.New("pacote duplicado (retransmissão)")
+var ErrInvalidCRC = errors.New("CRC inválido")
 
 var ServerState = State{}
 
@@ -155,14 +165,14 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 
 	// validar numero de sequência
 	if msg.Sequence != ServerState.SequenceNumber {
-		return Message{}, fmt.Errorf("sequencia inesperada: esperado %d, recebido %d", ServerState.SequenceNumber, msg.Sequence)
+		return Message{}, ErrUnexpectedSequence
 	}
 
 	fmt.Printf("Mensagem capturada (CRC: %d): %s\n", crcValue, msg.String())
 	debug.PrintLog("Conteudo mensagem: %v\n", msg.Content)
 
 	if !crc.VerifyCRC(bufferUsable[:2+size], crcValue) {
-		return Message{}, fmt.Errorf("CRC invalido")
+		return Message{}, ErrInvalidCRC
 	}
 
 	// tudo certo, registrar sequência recebida e incrementar para a próxima mensagem
