@@ -9,6 +9,7 @@ import (
 )
 
 const startMarker = 0x7E
+const maxPacketSize = 31
 
 type PacketT uint8
 
@@ -53,7 +54,7 @@ func (s *State) Reset() {
 }
 
 type Message struct {
-	Content    string
+	Content    []byte
 	Sequence   uint8
 	PacketType PacketT
 }
@@ -77,9 +78,9 @@ func (m Message) ToBytes() []byte {
 	size := uint8(len(payload))
 
 	// garantir que hajam 32 bytes de dados
-	if size > 31 {
-		payload = payload[:31]
-		size = 31
+	if size > maxPacketSize {
+		payload = payload[:maxPacketSize] // inclui 0-30 bytes
+		size = maxPacketSize
 	}
 
 	sequence := m.Sequence & 0x3F
@@ -119,7 +120,7 @@ var ServerState = State{}
 Cria uma nova mensagem com o conteúdo e tipo especificados. O número de sequência é
 incrementado a cada mensagem criada e lida, garantindo sincronia entre remetente e destinatário.
 */
-func CreateMessage(content string, PacketT PacketT) Message {
+func CreateMessage(content []byte, PacketT PacketT) Message {
 	// incrementar o numero de sequência para a próxima mensagem
 	// após a função retornar
 	defer ServerState.addSequence()
@@ -153,7 +154,7 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	crcValue := bufferUsable[2+size]
 
 	msg := Message{
-		Content:    string(bufferUsable[2 : 2+size]),
+		Content:    bufferUsable[2 : 2+size],
 		Sequence:   ((bufferUsable[0] & 0x07) << 3) | (bufferUsable[1] >> 5),
 		PacketType: PacketT(bufferUsable[1] & 0x1F),
 	}

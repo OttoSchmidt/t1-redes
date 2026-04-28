@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"syscall"
 
@@ -23,8 +22,8 @@ func main() {
 	defer syscall.Close(sock)
 
 	for i := 0; i < 10; i++ {
-		msg := rawsockets.CreateMessage(fmt.Sprintf("PACMAN-TEST-PACKET-%d-aaaaaaaaaaaaa", i), rawsockets.Data)
-		err = rawsockets.SendMessage(sock, msg)
+		content := "isso eh uma mensagem maior que 31 bytes. o esperado eh que ele divida em varias mensagens."
+		err := rawsockets.SendContent(sock, []byte(content), rawsockets.Data)
 		if err != nil {
 			panic(err)
 		}
