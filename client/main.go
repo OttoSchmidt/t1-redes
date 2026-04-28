@@ -28,4 +28,15 @@ func main() {
 			panic(err)
 		}
 	}
+
+	file, err := os.OpenFile("files/teste.txt", os.O_RDONLY, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	err = rawsockets.SendFile(sock, 1, file)
+	if err != nil {
+		panic(err)
+	}
 }

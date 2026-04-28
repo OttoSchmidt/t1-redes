@@ -47,13 +47,44 @@ func main() {
 		case rawsockets.Ack, rawsockets.Nack:
 			continue
 		case rawsockets.Data:
-			reply := rawsockets.CreateMessage("", rawsockets.Ack)
-			if err := rawsockets.SendMessage(sock, reply); err != nil {
+			msg := rawsockets.CreateMessage(nil, rawsockets.Ack)
+			if err := rawsockets.SendMessage(sock, &msg); err != nil {
+				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
+			}
+		case rawsockets.TxtFile, rawsockets.JpgFile, rawsockets.Mp4File:
+			// enviar ack/nack
+			reply := rawsockets.CreateMessage(nil, rawsockets.Ack)
+			if err := rawsockets.SendMessage(sock, &reply); err != nil {
+				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
+			}
+
+			// extrair id, tamanho e tipo do arquivo do conteúdo do pacote
+			id, tam, err := rawsockets.ParseFileHeader(msg.Content)
+			if err != nil {
+				debug.PrintLog("Erro ao parsear cabecalho do arquivo: %v\n", err)
+				continue
+			}
+
+			// receber arquivo e salvar em disco
+			file, err := rawsockets.ReceiveFile(sock, id, tam, msg.PacketType)
+			if err != nil {
+				debug.PrintLog("Erro ao receber arquivo: %v\n", err)
+				continue
+			}
+			fmt.Printf("Arquivo recebido e salvo em: %s\n", file)
+
+			// abrir arquivo com handler padrao do sistema
+			if err := rawsockets.OpenDefaultFileHandler(file); err != nil {
+				debug.PrintLog("Erro ao abrir arquivo com handler padrao: %v\n", err)
+			}
+		case rawsockets.End:
+			msg := rawsockets.CreateMessage(nil, rawsockets.Ack)
+			if err := rawsockets.SendMessage(sock, &msg); err != nil {
 				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
 			}
 		default:
-			reply := rawsockets.CreateMessage("", rawsockets.Nack)
-			if err := rawsockets.SendMessage(sock, reply); err != nil {
+			msg := rawsockets.CreateMessage(nil, rawsockets.Nack)
+			if err := rawsockets.SendMessage(sock, &msg); err != nil {
 				debug.PrintLog("Erro ao enviar NACK: %v\n", err)
 			}
 		}
