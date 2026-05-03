@@ -38,7 +38,7 @@ type State struct {
 	SequenceNumber  uint8
 	lastReceivedSeq uint8
 	hasReceivedPkt  bool
-	lastSentBytes   []byte
+	lastSentMessage Message
 }
 
 func (s *State) addSequence() {
@@ -50,7 +50,7 @@ func (s *State) Reset() {
 	s.SequenceNumber = 0
 	s.lastReceivedSeq = 0
 	s.hasReceivedPkt = false
-	s.lastSentBytes = nil
+	s.lastSentMessage = Message{}
 }
 
 type Message struct {
@@ -104,6 +104,22 @@ func (m Message) ToBytes() []byte {
 	debug.PrintLog("Mensagem convertida p/ bytes: %v\n", frame)
 
 	return frame
+}
+
+func (m Message) EqualsTo(m2 Message) bool {
+	if (m.PacketType != m2.PacketType ||
+		m.Sequence != m2.Sequence || 
+		len(m.Content) != len(m2.Content)) {
+		return false
+	}
+
+	for i := 0; i < len(m.Content); i++ {
+		if m.Content[i] != m2.Content[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 var ErrTimeout = errors.New("timeout aguardando mensagem valida")

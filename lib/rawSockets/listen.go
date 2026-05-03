@@ -107,3 +107,75 @@ func ReceivePacketTWithTimeout(sock int, timeoutMillis int, expectedType PacketT
 	return msg, nil
 	
 }
+
+func ReceiveContent(sock int, buf []byte) ([]byte, error) {
+	messageCompleted := false
+	content := make([]byte, 0)
+
+	for !messageCompleted {
+		msg, err := ReceivePacket(sock, buf)
+		if err != nil {
+			if errors.Is(err, ErrDuplicatePacket) {
+				// pacote duplicado. se o ultimo pacote enviado foi ACK, enviar novamente e ignorar mensagem atual
+				if ServerState.lastSentMessage.PacketType == Ack {
+					if resendErr := ResendLastSent(sock); resendErr != nil {
+						return nil, fmt.Errorf("erro ao reenviar ultimo pacote (ack): %v\n", resendErr)
+					}
+					return nil, nil
+				}
+			} else if errors.Is(err, ErrInvalidCRC) {
+				// enviar nack e esperar pela mensagem correta
+				if resendErr := ResendLastSent(sock); resendErr != nil {
+					return nil, fmt.Errorf("erro ao enviar nack: %v\n", resendErr)
+				}
+				continue
+			} else if errors.Is(err, ErrIgnoredPacket) || errors.Is(err, ErrInvalidStartMarker) {
+				continue
+			} else {
+				return nil, err
+			}
+		}
+
+		// enviar ack
+		if msg.PacketType != Ack && msg.PacketType != Nack {
+			replyMsg := CreateMessage(nil, Ack)
+			if err = SendMessage(sock, &replyMsg); err != nil {
+				debug.PrintLog("erro ao enviar ack: %v\n", err)
+			}
+		}
+
+		switch msg.PacketType {
+		case Ack, Nack:
+			return nil, nil
+		case Data:
+			content = append(content, msg.Content...)
+		case TxtFile, JpgFile, Mp4File:
+			id, tam, err := ParseFileHeader(msg.Content)
+			if err != nil {
+				return nil, fmt.Errorf("erro ao interpretar cabecalho de arquivo: %v\n", err)
+			}
+
+			// ler os pacotes de dado do arquivo
+			file, err := ReceiveFile(sock, id, tam, msg.PacketType)
+			if err != nil {
+				return nil, fmt.Errorf("erro ao receber arquivo: %v\n", err)
+			}
+
+			fmt.Printf("arquivo recebido e salvo em: %s\n", file)
+
+			// abrir arquivo com handler padrao do sistema
+			if err := OpenDefaultFileHandler(file); err != nil {
+				fmt.Printf("erro ao abrir arquivo com handler padrao: %v\n", err)
+			}
+
+			messageCompleted = true
+		case End:
+			messageCompleted = true
+		default:
+			return nil, fmt.Errorf("tipo de mensagem desconhecido (%d)\n", msg.PacketType)
+		}
+
+	}
+
+	return content, nil
+}
