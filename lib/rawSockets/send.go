@@ -12,7 +12,8 @@ Envia a mensagem pelo socket especificado. Não possui timeout, retransmissão o
 func sendPacket(sock int, packet *Message) error {
 	frame := packet.ToBytes()
 
-	ServerState.lastSentBytes = append([]byte(nil), frame...)
+	// salvar ultima mensagem enviada
+	ServerState.lastSentMessage = *packet
 
 	_, err := syscall.Write(sock, frame)
 
@@ -24,10 +25,12 @@ Reenvia os bytes da última mensagem enviada pelo socket especificado. Útil par
 após receber um pacote duplicado (retransmissão do remetente).
 */
 func ResendLastSent(sock int) error {
-	if len(ServerState.lastSentBytes) == 0 {
+	if ServerState.lastSentMessage.EqualsTo(Message{}) {
 		return fmt.Errorf("nenhuma mensagem enviada anteriormente")
 	}
-	_, err := syscall.Write(sock, ServerState.lastSentBytes)
+
+	frame := ServerState.lastSentMessage.ToBytes()
+	_, err := syscall.Write(sock, frame)
 	return err
 }
 
@@ -82,10 +85,7 @@ func SendMessage(sock int, packet *Message) error {
 
 /*
 Envia o conteúdo pelo socket especificado. Pode dividir o conteudo em varias mensagens.
-Inclui um terminador de string (byte nulo) para indicar o fim do conteudo
-- byte nulo: e se o ultimo byte de um pacote qualquer for nulo?
-- mensagem com tipo End: eh permitido?
-- enviar tamanho total no inicio do batch de mensagens?
+Apos a transmissao, envia uma outra mensagem de tipo End para sinalizar o fim
 */
 func SendContent(sock int, content []byte, pktType PacketT) error {
 	// separar o conteudo em partes, se necessario
