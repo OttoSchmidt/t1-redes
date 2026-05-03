@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	debug "pacman-redes/lib/debug"
 	"path/filepath"
 
 	"golang.org/x/sys/unix"
+
+	debug "pacman-redes/lib/debug"
 )
 
 var ErrMissingStorage = errors.New("sem espaco de armazenamento")
