@@ -11,6 +11,21 @@ import (
 const startMarker = 0x7E
 const maxPacketSize = 31
 
+var MaxAttempts = 50 // nao eh const para facilitar testes
+const initialTimeoutMillis = 500
+const maxTimeoutMillis = 4000
+
+
+var ErrTimeout = errors.New("timeout aguardando mensagem valida")
+var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
+var ErrUnexpectedSequence = errors.New("sequência inesperada")
+var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
+var ErrIgnoredPacket = errors.New("pacote ignorado")
+var ErrDuplicatePacket = errors.New("pacote duplicado (retransmissão)")
+var ErrInvalidCRC = errors.New("CRC inválido")
+
+// =========== Tipos pacotes ===========
+
 type PacketT uint8
 
 const (
@@ -30,9 +45,42 @@ const (
 	End       PacketT = 16
 )
 
-var MaxAttempts = 50 // nao eh const para facilitar testes
-const initialTimeoutMillis = 500
-const maxTimeoutMillis = 4000
+func (p PacketT) String() string {
+	switch p {
+	case Ack:
+		return "ack"
+	case Nack:
+		return "nack"
+	case Visualize:
+		return "visualizacao"
+	case Init:
+		return "inicializacao"
+	case Data:
+		return "dados"
+	case TxtFile:
+		return "arq .txt"
+	case JpgFile:
+		return "arq .jpg"
+	case Mp4File:
+		return "arq .mp4"
+	case MoveRight:
+		return "mov. direita"
+	case MoveLeft:
+		return "mov. esquerda"
+	case MoveUp:
+		return "mov. cima"
+	case MoveDown:
+		return "mov. baixo"
+	case Error:
+		return "erro"
+	case End:
+		return "fim"
+	}
+	return "indefinido"
+}
+
+
+// ========== Estado Servidor ==========
 
 type State struct {
 	SequenceNumber  uint8
@@ -53,6 +101,10 @@ func (s *State) Reset() {
 	s.lastSentMessage = Message{}
 }
 
+var ServerState = State{}
+
+// ============= Mensagens =============
+
 type Message struct {
 	Content    []byte
 	Sequence   uint8
@@ -60,7 +112,7 @@ type Message struct {
 }
 
 func (m Message) String() string {
-	return fmt.Sprintf("Tamanho dados: %d, Sequencia: %d, Tipo: %d", len(m.Content), m.Sequence, m.PacketType)
+	return fmt.Sprintf("tam. dados: %2d | seq: %2d | tipo: %s", len(m.Content), m.Sequence, m.PacketType)
 }
 
 // Tamanho total da mensagem na rede em bytes
@@ -122,16 +174,6 @@ func (m Message) EqualsTo(m2 Message) bool {
 	return true
 }
 
-var ErrTimeout = errors.New("timeout aguardando mensagem valida")
-var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
-var ErrUnexpectedSequence = errors.New("sequência inesperada")
-var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
-var ErrIgnoredPacket = errors.New("pacote ignorado")
-var ErrDuplicatePacket = errors.New("pacote duplicado (retransmissão)")
-var ErrInvalidCRC = errors.New("CRC inválido")
-
-var ServerState = State{}
-
 /*
 Cria uma nova mensagem com o conteúdo e tipo especificados. O número de sequência é
 incrementado a cada mensagem criada e lida, garantindo sincronia entre remetente e destinatário.
@@ -189,8 +231,7 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 		return Message{}, ErrUnexpectedSequence
 	}
 
-	fmt.Printf("Mensagem capturada (CRC: %d): %s\n", crcValue, msg.String())
-	debug.PrintLog("Conteudo mensagem: %v\n", msg.Content)
+	debug.PrintLog("Conteudo mensagem (CRC: %d): %v\n", crcValue, msg.Content)
 
 	// tudo certo, registrar sequência recebida e incrementar para a próxima mensagem
 	ServerState.lastReceivedSeq = msg.Sequence
