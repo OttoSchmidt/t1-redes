@@ -3,6 +3,7 @@ package rawsockets
 import (
 	"errors"
 	"fmt"
+	debug "pacman-redes/lib/debug"
 	"syscall"
 )
 
@@ -16,6 +17,8 @@ func sendPacket(sock int, packet *Message) error {
 	ServerState.lastSentMessage = *packet
 
 	_, err := syscall.Write(sock, frame)
+
+	fmt.Printf("[MSG] enviado  => %s\n", packet.String())
 
 	return err
 }
@@ -55,7 +58,7 @@ func SendMessage(sock int, packet *Message) error {
 				return fmt.Errorf("falha ao enviar mensagem: %w", err)
 			}
 
-			fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, MaxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
+			debug.PrintLog("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, MaxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
 
 			msg, err := ReceivePacketTWithTimeout(sock, timeoutMillis, Ack)
 			
@@ -68,11 +71,11 @@ func SendMessage(sock int, packet *Message) error {
 					continue
 				}
 			case errors.Is(err, ErrTimeout):
-				fmt.Printf("Sem resposta dentro de %dms; reenviando...\n", timeoutMillis)
+				fmt.Printf("\t- sem resposta dentro de %4dms; reenviando...\n", timeoutMillis)
 				timeoutMillis = min(timeoutMillis*2, maxTimeoutMillis)
 				continue
 			case err == nil:
-				fmt.Printf("ACK recebido\n")
+				debug.PrintLog("\t- ack recebido\n")
 				return nil
 			default:
 				return fmt.Errorf("erro ao aguardar ACK: %w", err)
