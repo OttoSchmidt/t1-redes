@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"syscall"
 
@@ -17,20 +16,27 @@ func main() {
 	}
 
 	sock, err := rawsockets.CreateSocket(ifaceName)
-	defer syscall.Close(sock)
 	if err != nil {
 		panic(err)
 	}
+	defer syscall.Close(sock)
 
-	buf := make([]byte, 256)
-
-	fmt.Println("Servidor iniciado. Esperando mensagens...")
-	for {
-		content, err := rawsockets.ReceiveContent(sock, buf)
+	for i := 0; i < 10; i++ {
+		content := "isso eh uma mensagem maior que 31 bytes. o esperado eh que ele divida em varias mensagens."
+		err := rawsockets.SendContent(sock, []byte(content), rawsockets.Data)
 		if err != nil {
-			fmt.Printf("erro ao receber conteudo:\n\t- %v\n", err)
+			panic(err)
 		}
+	}
 
-		fmt.Printf("conteudo: %s\n", content)
+	file, err := os.OpenFile("files/teste.txt", os.O_RDONLY, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	err = rawsockets.SendFile(sock, 1, file)
+	if err != nil {
+		panic(err)
 	}
 }
