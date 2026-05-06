@@ -240,3 +240,10 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 
 	return msg, nil
 }
+
+func WriteMessageLog(log string) {
+	n, err := fmt.Fprint(pipeWriter, log)
+	if err != nil || n == 0 {
+		panic(err)
+	}
+}

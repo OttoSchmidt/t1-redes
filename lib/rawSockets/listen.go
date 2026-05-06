@@ -33,7 +33,7 @@ func ReceivePacket(sock int, buf []byte) (Message, error) {
 		return Message{}, err
 	}
 
-	fmt.Printf("[MSG] recebido => %s\n", msg.String())
+	WriteMessageLog(fmt.Sprintf("[MSG] recebido => %s\n", msg.String()))
 
 	return msg, nil
 }

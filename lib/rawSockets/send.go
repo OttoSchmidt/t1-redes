@@ -18,7 +18,7 @@ func sendPacket(sock int, packet *Message) error {
 
 	_, err := syscall.Write(sock, frame)
 
-	fmt.Printf("[MSG] enviado  => %s\n", packet.String())
+	WriteMessageLog(fmt.Sprintf("[MSG] enviado  => %s\n", packet.String()))
 
 	return err
 }
@@ -71,7 +71,7 @@ func SendMessage(sock int, packet *Message) error {
 					continue
 				}
 			case errors.Is(err, ErrTimeout):
-				fmt.Printf("\t- sem resposta dentro de %4dms; reenviando...\n", timeoutMillis)
+				WriteMessageLog(fmt.Sprintf("\t- sem resposta dentro de %4dms; reenviando...\n", timeoutMillis))
 				timeoutMillis = min(timeoutMillis*2, maxTimeoutMillis)
 				continue
 			case err == nil:

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"syscall"
+	"time"
 
 	rawsockets "pacman-redes/lib/rawSockets"
 )
@@ -20,6 +21,9 @@ func main() {
 		panic(err)
 	}
 	defer syscall.Close(sock)
+
+	// esperar janela de logs
+	time.Sleep(3 * time.Second)
 
 	for i := 0; i < 10; i++ {
 		content := "isso eh uma mensagem maior que 31 bytes. o esperado eh que ele divida em varias mensagens."
@@ -39,4 +43,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	file, err = os.OpenFile("files/drone.mp4", os.O_RDONLY, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	err = rawsockets.SendFile(sock, 1, file)
+
+	for ;; {}
 }
