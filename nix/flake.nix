@@ -25,6 +25,7 @@
         system = "x86_64-linux";
         modules = [
           ./configuration.nix # msm base do sistema
+          ./vm.nix
           ./hardware-configuration.nix # arq gerado pelo nixos-generate-config na vm
           ({ ... }: {
             # bootloader
