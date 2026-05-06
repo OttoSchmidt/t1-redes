@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+	"time"
 
 	rawsockets "pacman-redes/lib/rawSockets"
 )
@@ -22,6 +23,9 @@ func main() {
 		panic(err)
 	}
 
+	// esperar janela de logs
+	time.Sleep(3 * time.Second)
+
 	buf := make([]byte, 256)
 
 	fmt.Println("Esperando mensagens...")
@@ -32,7 +36,7 @@ func main() {
 		}
 
 		if len(content) > 0 {
-			fmt.Printf("Conteudo: %s\n", content)
+			rawsockets.WriteMessageLog(fmt.Sprintf("Conteudo: %s\n", content))
 		}
 	}
 }

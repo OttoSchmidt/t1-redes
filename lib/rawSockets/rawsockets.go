@@ -2,7 +2,10 @@ package rawsockets
 
 import (
 	"fmt"
+	"io"
 	"net"
+	"os"
+	"os/exec"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -11,6 +14,17 @@ import (
 )
 
 const ethPAll = 0x0003
+const termExec = "ptyxis"
+const msgLogsFile = "/tmp/pacman-msg.log"
+
+var pipeReader *io.PipeReader
+var pipeWriter *io.PipeWriter
+
+func init() {
+	fmt.Printf("inicializando janela de logs\n")
+	pipeReader, pipeWriter = io.Pipe()
+	go LogWindow()
+}
 
 func htons(v uint16) uint16 {
 	return (v<<8)&0xff00 | v>>8
@@ -53,4 +67,25 @@ func CreateSocket(ifaceName string) (int, error) {
 	debug.PrintLog("Socket raw na interface %s (ifindex=%d) com modo promíscuo\n", iface.Name, iface.Index)
 
 	return sock, nil
+}
+
+func LogWindow() {
+	// criar arquivo
+	file, err := os.Create(msgLogsFile)
+	if err != nil {
+		panic(err)
+	}
+
+	go func() {
+		// abrir novo terminal p/ ler do arquivo de log
+		cmd := exec.Command(termExec, "--", "tail", "-f", msgLogsFile)
+		cmd.Run()
+	}()
+
+	for ;; {
+		_, err = io.Copy(file, pipeReader)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
