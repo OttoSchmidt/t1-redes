@@ -2,7 +2,7 @@ SERVER_BIN=pacman_server
 CLIENT_BIN=pacman_client
 GO=go
 
-.PHONY: all debug client server test dist clean
+.PHONY: all debug vendor client server test dist clean
 
 TEST_FILES=lib/rawSockets/tests/*.go
 
@@ -12,6 +12,9 @@ all: client server
 
 debug:
 	$(eval BUILD_FLAGS += -tags debug)
+
+vendor:
+	$(eval BUILD_FLAGS += -mod=vendor)
 
 client:
 	$(GO) build $(BUILD_FLAGS) -o $(CLIENT_BIN) client/main.go
