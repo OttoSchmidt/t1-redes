@@ -36,7 +36,7 @@ func main() {
 		}
 
 		if len(content) > 0 {
-			rawsockets.WriteMessageLog(fmt.Sprintf("Conteudo: %s\n", content))
+			rawsockets.ServerState.WriteLog(fmt.Sprintf("Conteudo: %s\n", content))
 		}
 	}
 }

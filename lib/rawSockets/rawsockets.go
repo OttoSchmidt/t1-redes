@@ -2,7 +2,6 @@ package rawsockets
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -15,15 +14,36 @@ import (
 
 const ethPAll = 0x0003
 const termExec = "ptyxis"
-const msgLogsFile = "/tmp/pacman-msg.log"
-
-var pipeReader *io.PipeReader
-var pipeWriter *io.PipeWriter
 
 func init() {
 	fmt.Printf("inicializando janela de logs\n")
-	pipeReader, pipeWriter = io.Pipe()
-	go LogWindow()
+
+	// criar canal nomeado
+	pipePath := "/tmp/pacman_pipe"
+	os.Remove(pipePath)
+	syscall.Mkfifo(pipePath, 0666)
+	os.Chmod(pipePath, 0666)
+
+	// criar canal
+	ServerState.logQueue = make(chan string, 100)
+
+	go logWorker(pipePath)
+
+	// abrir terminal e ler do pipe nomeado. o terminal precisa rodar dentro do usuario logodo no sistema,
+	// pois se rodar como root, nao eh possivel criar um outro terminal
+	user := os.Getenv("SUDO_USER")
+	uid := os.Getenv("SUDO_UID")
+
+	cmd := exec.Command("sudo", "-u", user,
+		"env",
+		"XDG_RUNTIME_DIR=/run/user/"+uid,
+		"ptyxis", "--new-window", "--", "bash", "-c", "cat < "+pipePath,
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error: %v\nOutput: %s\n", err, string(output))
+	}
 }
 
 func htons(v uint16) uint16 {
@@ -69,23 +89,20 @@ func CreateSocket(ifaceName string) (int, error) {
 	return sock, nil
 }
 
-func LogWindow() {
-	// criar arquivo
-	file, err := os.Create(msgLogsFile)
+/*
+Le as mensagens do canal de logs e escreve num pipe nomeado
+*/
+func logWorker(pipe string) {
+	file, err := os.OpenFile(pipe, os.O_RDWR, os.ModeNamedPipe)
 	if err != nil {
-		panic(err)
+		fmt.Printf("erro ao abrir pipe nomeado: %s\n", err)
+		return
 	}
+	defer file.Close()
 
-	go func() {
-		// abrir novo terminal p/ ler do arquivo de log
-		cmd := exec.Command(termExec, "--", "tail", "-f", msgLogsFile)
-		cmd.Run()
-	}()
-
-	for ;; {
-		_, err = io.Copy(file, pipeReader)
-		if err != nil {
-			panic(err)
-		}
+	// caso a fila acabe, a rotina para aqui.
+	// so termina quando o canal eh fechado
+	for msg := range ServerState.logQueue {
+		file.WriteString(msg)
 	}
 }

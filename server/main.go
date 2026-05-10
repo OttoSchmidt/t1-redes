@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 	"time"
@@ -25,6 +26,7 @@ func main() {
 	// esperar janela de logs
 	time.Sleep(3 * time.Second)
 
+	fmt.Println("servidor iniciado")
 	for i := 0; i < 10; i++ {
 		content := "isso eh uma mensagem maior que 31 bytes. o esperado eh que ele divida em varias mensagens."
 		err := rawsockets.SendContent(sock, []byte(content), rawsockets.Data)
@@ -33,6 +35,7 @@ func main() {
 		}
 	}
 
+	/*
 	file, err := os.OpenFile("files/teste.txt", os.O_RDONLY, 0)
 	if err != nil {
 		panic(err)
@@ -43,8 +46,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	*/
 
-	file, err = os.OpenFile("files/drone.mp4", os.O_RDONLY, 0)
+	file, err := os.OpenFile("files/drone.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		panic(err)
 	}
