@@ -3,6 +3,7 @@ package rawsockets
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	crc "pacman-redes/lib/crc"
@@ -154,7 +155,17 @@ func (m Message) ToBytes() []byte {
 	// terceiro byte: últimos 3 bits da sequência + 5 bits de tipo
 	frame = append(frame, byte((sequence&0x07)<<5)|(uint8(m.PacketType)&0x1F))
 
-	frame = append(frame, payload...)
+	// se houver o identificador de VLAN na possicao 9 e 10 do conteudo,
+	// eh necessario adicionar um byte de quebra logo apos
+	if size > 10 && (payload[9] == 0x88 || payload[9] == 0x81) {
+		newPayload := make([]byte, len(payload))
+		copy(newPayload, payload)
+
+		debug.PrintLog("\t- byte p/ quebrar vlan adicionado\n")
+		frame = append(frame, slices.Insert(newPayload, 10, 0xff)...)
+	} else {
+		frame = append(frame, payload...)
+	}
 
 	frame = append(frame, crc.CalculateCRC(frame[1:]))
 
@@ -164,7 +175,7 @@ func (m Message) ToBytes() []byte {
 		frame = append(frame, padding...)
 	}
 
-	debug.PrintLog("Mensagem convertida p/ bytes: %v\n", frame)
+	debug.PrintLog("Mensagem convertida p/ bytes: %x\n", frame)
 
 	return frame
 }
@@ -183,6 +194,23 @@ func (m Message) EqualsTo(m2 Message) bool {
 	}
 
 	return true
+}
+
+func deformatContent(content []byte) []byte {
+	// verificar bytes de VLAN (0x88 e 0xa8)
+	if len(content) >= 10 && (content[9] == 0x88 || content[9] == 0x81) {
+		var deformattedContent []byte
+		deformattedContent = content[:10]
+
+		// adicionar a outra parte do conteudo, se existir
+		if len(content) >= 11 {
+			deformattedContent = append(deformattedContent, content[11:]...)
+		}
+
+		return deformattedContent
+	}
+
+	return content
 }
 
 /*
@@ -219,18 +247,24 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 		return Message{}, fmt.Errorf("pacote muito curto (esperado: %d, recebido: %d)", 4+size, n)
 	}
 
+	if n > 15 && (buf[12] == 0x88 || buf[12] == 0x81) {
+		size += 1
+	}
+
 	bufferUsable := buf[1 : 4+size]
 	crcValue := bufferUsable[2+size]
-
-	msg := Message{
-		Content:    bufferUsable[2 : 2+size],
-		Sequence:   ((bufferUsable[0] & 0x07) << 3) | (bufferUsable[1] >> 5),
-		PacketType: PacketT(bufferUsable[1] & 0x1F),
-	}
 
 	if !crc.VerifyCRC(bufferUsable[:2+size], crcValue) {
 		return Message{}, ErrInvalidCRC
 	}
+
+	msg := Message{
+		Content:    deformatContent(bufferUsable[2 : 2+size]),
+		Sequence:   ((bufferUsable[0] & 0x07) << 3) | (bufferUsable[1] >> 5),
+		PacketType: PacketT(bufferUsable[1] & 0x1F),
+	}
+
+	debug.PrintLog("Conteudo mensagem (CRC: %d): %v\n", crcValue, msg.Content)
 
 	// detectar retransmissão: sequência igual à última recebida com sucesso
 	if ServerState.hasReceivedPkt && msg.Sequence == ServerState.lastReceivedSeq {
@@ -241,8 +275,6 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	if msg.Sequence != ServerState.SequenceNumber {
 		return Message{}, ErrUnexpectedSequence
 	}
-
-	debug.PrintLog("Conteudo mensagem (CRC: %d): %v\n", crcValue, msg.Content)
 
 	// tudo certo, registrar sequência recebida e incrementar para a próxima mensagem
 	ServerState.lastReceivedSeq = msg.Sequence

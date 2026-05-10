@@ -142,7 +142,7 @@ func ReceiveContent(sock int, buf []byte) ([]byte, error) {
 		// enviar ack
 		if msg.PacketType != Ack && msg.PacketType != Nack {
 			replyMsg := CreateMessage(nil, Ack)
-			if err = SendMessage(sock, &replyMsg); err != nil {
+			if err = SendMessage(sock, replyMsg); err != nil {
 				debug.PrintLog("erro ao enviar ack: %v\n", err)
 			}
 		}
