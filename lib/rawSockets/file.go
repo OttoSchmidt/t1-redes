@@ -53,7 +53,7 @@ func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
 func ParseFileHeader(content []byte) (id int, tam uint, err error) {
 	debug.PrintLog("cabecalho arquivo recebido: %s\n", string(content))
 
-	_, err = fmt.Sscanf(string(content), "%d - %d", &id, &tam)
+	_, err = fmt.Sscanf(string(content), "%c%d", &id, &tam)
 	if err != nil {
 		return 0, 0, fmt.Errorf("formato de cabecalho de arquivo invalido: %w", err)
 	}
@@ -83,7 +83,7 @@ func ReceiveFile(sock int, id int, tam uint, fileType PacketT) (string, error) {
 			if errors.Is(err, ErrInvalidCRC) {
 				// enviar NACK para solicitar retransmissão
 				nackMsg := CreateMessage(nil, Nack)
-				if sendErr := SendMessage(sock, &nackMsg); sendErr != nil {
+				if sendErr := SendMessage(sock, nackMsg); sendErr != nil {
 					debug.PrintLog("Erro ao enviar NACK para pacote com CRC invalido: %v\n", sendErr)
 				}
 			}
@@ -91,7 +91,7 @@ func ReceiveFile(sock int, id int, tam uint, fileType PacketT) (string, error) {
 		}
 
 		ackMsg := CreateMessage(nil, Ack)
-		if sendErr := SendMessage(sock, &ackMsg); sendErr != nil {
+		if sendErr := SendMessage(sock, ackMsg); sendErr != nil {
 			debug.PrintLog("Erro ao enviar ACK para pacote recebido: %v\n", sendErr)
 			continue
 		}
@@ -150,8 +150,8 @@ func SendFile(sock int, id int, file *os.File) error {
 	}
 
 	// enviar pacote cabecalho
-	msg := CreateMessage([]byte(fmt.Sprintf("%d - %d", id, fileInfo.Size())), fileType)
-	err = SendMessage(sock, &msg)
+	msg := CreateMessage([]byte(fmt.Sprintf("%c%d", id&0xff, fileInfo.Size())), fileType)
+	err = SendMessage(sock, msg)
 	if err != nil {
 		return fmt.Errorf("falha ao enviar cabecalho do arquivo: %w", err)
 	}

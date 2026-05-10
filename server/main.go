@@ -54,6 +54,8 @@ func main() {
 	}
 	defer file.Close()
 	err = rawsockets.SendFile(sock, 1, file)
+	
 
-	for ;; {}
+	for {}
+
 }

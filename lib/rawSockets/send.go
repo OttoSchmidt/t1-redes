@@ -3,18 +3,19 @@ package rawsockets
 import (
 	"errors"
 	"fmt"
-	debug "pacman-redes/lib/debug"
 	"syscall"
+
+	debug "pacman-redes/lib/debug"
 )
 
 /*
 Envia a mensagem pelo socket especificado. Não possui timeout, retransmissão ou verificação de resposta.
 */
-func sendPacket(sock int, packet *Message) error {
+func sendPacket(sock int, packet Message) error {
 	frame := packet.ToBytes()
 
 	// salvar ultima mensagem enviada
-	ServerState.lastSentMessage = *packet
+	ServerState.lastSentMessage = packet
 
 	_, err := syscall.Write(sock, frame)
 
@@ -41,7 +42,7 @@ func ResendLastSent(sock int) error {
 Envia a mensagem pelo socket especificado. Se o tipo da mensagem for ACK, NACK ou Error, é enviada sem aguardar resposta.
 Para outros tipos, implementa um mecanismo de retransmissão com timeout e limite de tentativas, aguardando alguma resposta.
 */
-func SendMessage(sock int, packet *Message) error {
+func SendMessage(sock int, packet Message) error {
 	if (packet.PacketType == Ack || packet.PacketType == Nack || packet.PacketType == Error) {
 		err := sendPacket(sock, packet)
 		if err != nil {
@@ -91,24 +92,15 @@ Envia o conteúdo pelo socket especificado. Pode dividir o conteudo em varias me
 Apos a transmissao, envia uma outra mensagem de tipo End para sinalizar o fim
 */
 func SendContent(sock int, content []byte, pktType PacketT) error {
-	// separar o conteudo em partes, se necessario
-	var dataToSend [][]byte
-	if len(content) >= maxPacketSize {
-		for i := 0; i < len(content); i += maxPacketSize {
-			upperBound := i+maxPacketSize
-			if upperBound > len(content) {
-				upperBound = len(content)
-			}
-			dataToSend = append(dataToSend, content[i:upperBound])
+	// separar o conteudo em partes e enviar mensagens
+	for i := 0; i < len(content); i += maxPacketSize {
+		upperBound := i+maxPacketSize
+		if upperBound > len(content) {
+			upperBound = len(content)
 		}
-	} else {
-		dataToSend = append(dataToSend, content)
-	}
 
-	// enviar as mensagens
-	for i := 0; i < len(dataToSend); i++ {
-		msg := CreateMessage(dataToSend[i], pktType)
-		err := SendMessage(sock, &msg)
+		msg := CreateMessage(content[i:upperBound], pktType)
+		err := SendMessage(sock, msg)
 		if err != nil {
 			return fmt.Errorf("erro ao enviar conteudo: %w\n", err)
 		}
@@ -116,7 +108,7 @@ func SendContent(sock int, content []byte, pktType PacketT) error {
 
 	// enviar mensagem de fim
 	endMsg := CreateMessage(nil, End)
-	err := SendMessage(sock, &endMsg)
+	err := SendMessage(sock, endMsg)
 	if err != nil {
 		return fmt.Errorf("erro ao enviar mensagem de fim: %w\n", err)
 	}
