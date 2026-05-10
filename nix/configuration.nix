@@ -66,6 +66,8 @@
   # docker
   virtualisation.docker.enable = true;
 
+  programs.wireshark.enable = true;
+
   services.openssh = {
     enable = true;
     settings = {
@@ -88,6 +90,7 @@
     vim
     vscode
     sshfs
+    wireshark
   ];
 
   system.stateVersion = "25.11";
