@@ -3,6 +3,7 @@ package rawsockets
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	crc "pacman-redes/lib/crc"
 	debug "pacman-redes/lib/debug"
@@ -83,10 +84,20 @@ func (p PacketT) String() string {
 // ========== Estado Servidor ==========
 
 type State struct {
+	logQueue        chan string
 	SequenceNumber  uint8
 	lastReceivedSeq uint8
 	hasReceivedPkt  bool
 	lastSentMessage Message
+}
+
+func (s *State) WriteLog(msg string) {
+	s.logQueue <- msg
+}
+
+func (s *State) CloseLogWindow() {
+	close(s.logQueue)
+	time.Sleep(time.Second)
 }
 
 func (s *State) addSequence() {
@@ -239,11 +250,4 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	ServerState.addSequence()
 
 	return msg, nil
-}
-
-func WriteMessageLog(log string) {
-	n, err := fmt.Fprint(pipeWriter, log)
-	if err != nil || n == 0 {
-		panic(err)
-	}
 }

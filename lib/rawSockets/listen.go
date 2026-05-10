@@ -28,12 +28,13 @@ func ReceivePacket(sock int, buf []byte) (Message, error) {
 	if err != nil {
 		if err != ErrInvalidStartMarker {
 			debug.PrintLog("Erro ao ler mensagem: %v\n", err)
+			debug.PrintLog("\tmsg recebida: %s\n", msg.ToBytes())
 		}
 			
 		return Message{}, err
 	}
 
-	WriteMessageLog(fmt.Sprintf("[MSG] recebido => %s\n", msg.String()))
+	ServerState.WriteLog(fmt.Sprintf("[MSG] recebido => %s\n", msg.String()))
 
 	return msg, nil
 }
