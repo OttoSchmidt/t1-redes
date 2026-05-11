@@ -25,6 +25,8 @@ var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
 var ErrIgnoredPacket = errors.New("pacote ignorado")
 var ErrDuplicatePacket = errors.New("pacote duplicado (retransmissão)")
 var ErrInvalidCRC = errors.New("CRC inválido")
+var ErrMissingStorage = errors.New("sem espaco de armazenamento")
+var ErrWriteFile = errors.New("escrita do arquivo invalida")
 
 // =========== Tipos pacotes ===========
 

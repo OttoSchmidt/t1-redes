@@ -140,7 +140,9 @@ func ReceiveContent(sock int, buf []byte) ([]byte, error) {
 		}
 
 		// enviar ack
-		if msg.PacketType != Ack && msg.PacketType != Nack {
+		if msg.PacketType != Ack && msg.PacketType != Nack && 
+			msg.PacketType != JpgFile && msg.PacketType != Mp4File &&
+			msg.PacketType != TxtFile {
 			replyMsg := CreateMessage(nil, Ack)
 			if err = SendMessage(sock, replyMsg); err != nil {
 				debug.PrintLog("erro ao enviar ack: %v\n", err)
@@ -158,16 +160,40 @@ func ReceiveContent(sock int, buf []byte) ([]byte, error) {
 				return nil, fmt.Errorf("erro ao interpretar cabecalho de arquivo: %v\n", err)
 			}
 
+			file, err := VerifyFileViability(id, tam, msg.PacketType)
+			if err != nil {
+				// enviar pacote de erro
+				codeError := "2"
+				if errors.Is(err, ErrMissingStorage) {
+					codeError = "1"
+					ServerState.WriteLog(fmt.Sprintf("\t- %s\n", err.Error()))
+				} else {
+					ServerState.WriteLog(fmt.Sprintf("\t- erro ao escrever arquivo: %s\n", err))
+				}	
+
+				replyMsg := CreateMessage([]byte(codeError), Error)
+				if err = SendMessage(sock, replyMsg); err != nil {
+					debug.PrintLog("erro ao enviar erro: %v\n", err)
+				}
+
+			} else {
+				// enviar ack
+				replyMsg := CreateMessage(nil, Ack)
+				if err = SendMessage(sock, replyMsg); err != nil {
+					debug.PrintLog("erro ao enviar ack: %v\n", err)
+				}
+			}
+
 			// ler os pacotes de dado do arquivo
-			file, err := ReceiveFile(sock, id, tam, msg.PacketType)
+			fileName, err := ReceiveFile(sock, file, tam)
 			if err != nil {
 				return nil, fmt.Errorf("erro ao receber arquivo: %v\n", err)
 			}
 
-			fmt.Printf("arquivo recebido e salvo em: %s\n", file)
+			fmt.Printf("arquivo recebido e salvo em: %s\n", fileName)
 
 			// abrir arquivo com handler padrao do sistema
-			if err := OpenDefaultFileHandler(file); err != nil {
+			if err := OpenDefaultFileHandler(fileName); err != nil {
 				fmt.Printf("erro ao abrir arquivo com handler padrao: %v\n", err)
 			}
 
