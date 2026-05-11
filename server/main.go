@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"syscall"
-	"time"
 
 	rawsockets "pacman-redes/lib/rawSockets"
 )
@@ -23,10 +22,7 @@ func main() {
 	}
 	defer syscall.Close(sock)
 
-	// esperar janela de logs
-	time.Sleep(3 * time.Second)
-
-	fmt.Println("servidor iniciado")
+	fmt.Println("Servidor iniciado")
 	for i := 0; i < 10; i++ {
 		content := "isso eh uma mensagem maior que 31 bytes. o esperado eh que ele divida em varias mensagens."
 		err := rawsockets.SendContent(sock, []byte(content), rawsockets.Data)
