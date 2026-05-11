@@ -25,7 +25,7 @@ func init() {
 	os.Chmod(pipePath, 0666)
 
 	// criar canal
-	ServerState.logQueue = make(chan string, 100)
+	ServerState.logQueue = make(chan string, 512)
 
 	go logWorker(pipePath)
 

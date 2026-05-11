@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"syscall"
-	"time"
 
 	rawsockets "pacman-redes/lib/rawSockets"
 )
@@ -22,9 +21,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	// esperar janela de logs
-	time.Sleep(3 * time.Second)
 
 	buf := make([]byte, 256)
 
