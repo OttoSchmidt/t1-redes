@@ -16,8 +16,8 @@ func (t *lookupTable) generate() {
 			// os 4 bits superiores e inferiores de um byte
 			crc := byte((i << 4) | j)
 
-			// calcular o crc realizando 8 iteracoes de deslocamento bit a bit,
-			// aplicando o polinômio quando o bit mais significativo for 1
+			// calcular o crc realizando 8 iteracoes de deslocamento bit a bit no valor
+			// inicial e aplicando o polinômio quando o bit mais significativo for 1,
 			for k := 0; k < 8; k++ {
 				if (crc & 0x80) != 0 {
 					crc = (crc << 1) ^ crcPolynomial

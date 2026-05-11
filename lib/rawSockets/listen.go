@@ -28,10 +28,13 @@ func ReceivePacket(sock int, buf []byte) (Message, error) {
 	if err != nil {
 		if err != ErrInvalidStartMarker {
 			debug.PrintLog("Erro ao ler mensagem: %v\n", err)
+			debug.PrintLog("\tmsg recebida: %s\n", msg.ToBytes())
 		}
 			
 		return Message{}, err
 	}
+
+	ServerState.WriteLog(fmt.Sprintf("[MSG] recebido => %s\n", msg.String()))
 
 	return msg, nil
 }
@@ -106,4 +109,102 @@ func ReceivePacketTWithTimeout(sock int, timeoutMillis int, expectedType PacketT
 
 	return msg, nil
 	
+}
+
+func ReceiveContent(sock int, buf []byte) ([]byte, error) {
+	messageCompleted := false
+	content := make([]byte, 0)
+
+	for !messageCompleted {
+		msg, err := ReceivePacket(sock, buf)
+		if err != nil {
+			if errors.Is(err, ErrDuplicatePacket) {
+				// pacote duplicado. se o ultimo pacote enviado foi ACK, enviar novamente e ignorar mensagem atual
+				if ServerState.lastSentMessage.PacketType == Ack {
+					if resendErr := ResendLastSent(sock); resendErr != nil {
+						return nil, fmt.Errorf("erro ao reenviar ultimo pacote (ack): %v\n", resendErr)
+					}
+					return nil, nil
+				}
+			} else if errors.Is(err, ErrInvalidCRC) {
+				// enviar nack e esperar pela mensagem correta
+				if resendErr := ResendLastSent(sock); resendErr != nil {
+					return nil, fmt.Errorf("erro ao enviar nack: %v\n", resendErr)
+				}
+				continue
+			} else if errors.Is(err, ErrIgnoredPacket) || errors.Is(err, ErrInvalidStartMarker) {
+				continue
+			} else {
+				return nil, err
+			}
+		}
+
+		// enviar ack
+		if msg.PacketType != Ack && msg.PacketType != Nack && 
+			msg.PacketType != JpgFile && msg.PacketType != Mp4File &&
+			msg.PacketType != TxtFile {
+			replyMsg := CreateMessage(nil, Ack)
+			if err = SendMessage(sock, replyMsg); err != nil {
+				debug.PrintLog("erro ao enviar ack: %v\n", err)
+			}
+		}
+
+		switch msg.PacketType {
+		case Ack, Nack:
+			return nil, nil
+		case Data:
+			content = append(content, msg.Content...)
+		case TxtFile, JpgFile, Mp4File:
+			id, tam, err := ParseFileHeader(msg.Content)
+			if err != nil {
+				return nil, fmt.Errorf("erro ao interpretar cabecalho de arquivo: %v\n", err)
+			}
+
+			file, err := VerifyFileViability(id, tam, msg.PacketType)
+			if err != nil {
+				// enviar pacote de erro
+				codeError := "2"
+				if errors.Is(err, ErrMissingStorage) {
+					codeError = "1"
+					ServerState.WriteLog(fmt.Sprintf("\t- %s\n", err.Error()))
+				} else {
+					ServerState.WriteLog(fmt.Sprintf("\t- erro ao escrever arquivo: %s\n", err))
+				}	
+
+				replyMsg := CreateMessage([]byte(codeError), Error)
+				if err = SendMessage(sock, replyMsg); err != nil {
+					debug.PrintLog("erro ao enviar erro: %v\n", err)
+				}
+
+			} else {
+				// enviar ack
+				replyMsg := CreateMessage(nil, Ack)
+				if err = SendMessage(sock, replyMsg); err != nil {
+					debug.PrintLog("erro ao enviar ack: %v\n", err)
+				}
+			}
+
+			// ler os pacotes de dado do arquivo
+			fileName, err := ReceiveFile(sock, file, tam)
+			if err != nil {
+				return nil, fmt.Errorf("erro ao receber arquivo: %v\n", err)
+			}
+
+			fmt.Printf("arquivo recebido e salvo em: %s\n", fileName)
+
+			// abrir arquivo com handler padrao do sistema
+			if err := OpenDefaultFileHandler(fileName); err != nil {
+				fmt.Printf("erro ao abrir arquivo com handler padrao: %v\n", err)
+			}
+
+			messageCompleted = true
+		case End:
+			messageCompleted = true
+		default:
+			return nil, fmt.Errorf("tipo de mensagem desconhecido (%d)\n", msg.PacketType)
+		}
+
+	}
+
+	return content, nil
 }

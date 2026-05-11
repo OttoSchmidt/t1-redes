@@ -17,16 +17,22 @@ func main() {
 	}
 
 	sock, err := rawsockets.CreateSocket(ifaceName)
+	defer syscall.Close(sock)
 	if err != nil {
 		panic(err)
 	}
-	defer syscall.Close(sock)
 
-	for i := 0; i < 10; i++ {
-		msg := rawsockets.CreateMessage(fmt.Sprintf("PACMAN-TEST-PACKET-%d-aaaaaaaaaaaaa", i), rawsockets.Data)
-		err = rawsockets.SendMessage(sock, msg)
+	buf := make([]byte, 256)
+
+	fmt.Println("Esperando mensagens...")
+	for {
+		content, err := rawsockets.ReceiveContent(sock, buf)
 		if err != nil {
-			panic(err)
+			fmt.Printf("erro ao receber conteudo:\n\t- %v\n", err)
+		}
+
+		if len(content) > 0 {
+			rawsockets.ServerState.WriteLog(fmt.Sprintf("Conteudo: %s\n", content))
 		}
 	}
 }

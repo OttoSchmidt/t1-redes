@@ -3,12 +3,32 @@ package rawsockets
 import (
 	"errors"
 	"fmt"
+	"slices"
+	"time"
 
 	crc "pacman-redes/lib/crc"
 	debug "pacman-redes/lib/debug"
 )
 
 const startMarker = 0x7E
+const maxPacketSize = 31
+
+var MaxAttempts = 50 // nao eh const para facilitar testes
+const initialTimeoutMillis = 500
+const maxTimeoutMillis = 4000
+
+
+var ErrTimeout = errors.New("timeout aguardando mensagem valida")
+var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
+var ErrUnexpectedSequence = errors.New("sequência inesperada")
+var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
+var ErrIgnoredPacket = errors.New("pacote ignorado")
+var ErrDuplicatePacket = errors.New("pacote duplicado (retransmissão)")
+var ErrInvalidCRC = errors.New("CRC inválido")
+var ErrMissingStorage = errors.New("sem espaco de armazenamento")
+var ErrWriteFile = errors.New("escrita do arquivo invalida")
+
+// =========== Tipos pacotes ===========
 
 type PacketT uint8
 
@@ -29,15 +49,58 @@ const (
 	End       PacketT = 16
 )
 
-var MaxAttempts = 50 // nao eh const para facilitar testes
-const initialTimeoutMillis = 500
-const maxTimeoutMillis = 4000
+func (p PacketT) String() string {
+	switch p {
+	case Ack:
+		return "ack"
+	case Nack:
+		return "nack"
+	case Visualize:
+		return "visualizacao"
+	case Init:
+		return "inicializacao"
+	case Data:
+		return "dados"
+	case TxtFile:
+		return "arq .txt"
+	case JpgFile:
+		return "arq .jpg"
+	case Mp4File:
+		return "arq .mp4"
+	case MoveRight:
+		return "mov. direita"
+	case MoveLeft:
+		return "mov. esquerda"
+	case MoveUp:
+		return "mov. cima"
+	case MoveDown:
+		return "mov. baixo"
+	case Error:
+		return "erro"
+	case End:
+		return "fim"
+	}
+	return "indefinido"
+}
+
+
+// ========== Estado Servidor ==========
 
 type State struct {
+	logQueue        chan string
 	SequenceNumber  uint8
 	lastReceivedSeq uint8
 	hasReceivedPkt  bool
-	lastSentBytes   []byte
+	lastSentMessage Message
+}
+
+func (s *State) WriteLog(msg string) {
+	s.logQueue <- msg
+}
+
+func (s *State) CloseLogWindow() {
+	close(s.logQueue)
+	time.Sleep(time.Second)
 }
 
 func (s *State) addSequence() {
@@ -49,17 +112,21 @@ func (s *State) Reset() {
 	s.SequenceNumber = 0
 	s.lastReceivedSeq = 0
 	s.hasReceivedPkt = false
-	s.lastSentBytes = nil
+	s.lastSentMessage = Message{}
 }
 
+var ServerState = State{}
+
+// ============= Mensagens =============
+
 type Message struct {
-	Content    string
+	Content    []byte
 	Sequence   uint8
 	PacketType PacketT
 }
 
 func (m Message) String() string {
-	return fmt.Sprintf("Tamanho dados: %d, Sequencia: %d, Tipo: %d", len(m.Content), m.Sequence, m.PacketType)
+	return fmt.Sprintf("tam. dados: %2d | seq: %2d | tipo: %s", len(m.Content), m.Sequence, m.PacketType)
 }
 
 // Tamanho total da mensagem na rede em bytes
@@ -77,9 +144,9 @@ func (m Message) ToBytes() []byte {
 	size := uint8(len(payload))
 
 	// garantir que hajam 32 bytes de dados
-	if size > 31 {
-		payload = payload[:31]
-		size = 31
+	if size > maxPacketSize {
+		payload = payload[:maxPacketSize] // inclui 0-30 bytes
+		size = maxPacketSize
 	}
 
 	sequence := m.Sequence & 0x3F
@@ -90,7 +157,17 @@ func (m Message) ToBytes() []byte {
 	// terceiro byte: últimos 3 bits da sequência + 5 bits de tipo
 	frame = append(frame, byte((sequence&0x07)<<5)|(uint8(m.PacketType)&0x1F))
 
-	frame = append(frame, payload...)
+	// se houver o identificador de VLAN na possicao 9 e 10 do conteudo,
+	// eh necessario adicionar um byte de quebra logo apos
+	if size > 10 && (payload[9] == 0x88 || payload[9] == 0x81) {
+		newPayload := make([]byte, len(payload))
+		copy(newPayload, payload)
+
+		debug.PrintLog("\t- byte p/ quebrar vlan adicionado\n")
+		frame = append(frame, slices.Insert(newPayload, 10, 0xff)...)
+	} else {
+		frame = append(frame, payload...)
+	}
 
 	frame = append(frame, crc.CalculateCRC(frame[1:]))
 
@@ -100,26 +177,49 @@ func (m Message) ToBytes() []byte {
 		frame = append(frame, padding...)
 	}
 
-	debug.PrintLog("Mensagem convertida p/ bytes: %v\n", frame)
+	debug.PrintLog("Mensagem convertida p/ bytes: %x\n", frame)
 
 	return frame
 }
 
-var ErrTimeout = errors.New("timeout aguardando mensagem valida")
-var ErrInvalidStartMarker = errors.New("marcador de inicio inválido")
-var ErrUnexpectedSequence = errors.New("sequência inesperada")
-var ErrUnexpectedPacketType = errors.New("tipo de pacote inesperado")
-var ErrIgnoredPacket = errors.New("pacote ignorado")
-var ErrDuplicatePacket = errors.New("pacote duplicado (retransmissão)")
-var ErrInvalidCRC = errors.New("CRC inválido")
+func (m Message) EqualsTo(m2 Message) bool {
+	if (m.PacketType != m2.PacketType ||
+		m.Sequence != m2.Sequence || 
+		len(m.Content) != len(m2.Content)) {
+		return false
+	}
 
-var ServerState = State{}
+	for i := 0; i < len(m.Content); i++ {
+		if m.Content[i] != m2.Content[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func deformatContent(content []byte) []byte {
+	// verificar bytes de VLAN (0x88 e 0xa8)
+	if len(content) >= 10 && (content[9] == 0x88 || content[9] == 0x81) {
+		var deformattedContent []byte
+		deformattedContent = content[:10]
+
+		// adicionar a outra parte do conteudo, se existir
+		if len(content) >= 11 {
+			deformattedContent = append(deformattedContent, content[11:]...)
+		}
+
+		return deformattedContent
+	}
+
+	return content
+}
 
 /*
 Cria uma nova mensagem com o conteúdo e tipo especificados. O número de sequência é
 incrementado a cada mensagem criada e lida, garantindo sincronia entre remetente e destinatário.
 */
-func CreateMessage(content string, PacketT PacketT) Message {
+func CreateMessage(content []byte, PacketT PacketT) Message {
 	// incrementar o numero de sequência para a próxima mensagem
 	// após a função retornar
 	defer ServerState.addSequence()
@@ -149,18 +249,24 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 		return Message{}, fmt.Errorf("pacote muito curto (esperado: %d, recebido: %d)", 4+size, n)
 	}
 
+	if n > 15 && (buf[12] == 0x88 || buf[12] == 0x81) {
+		size += 1
+	}
+
 	bufferUsable := buf[1 : 4+size]
 	crcValue := bufferUsable[2+size]
-
-	msg := Message{
-		Content:    string(bufferUsable[2 : 2+size]),
-		Sequence:   ((bufferUsable[0] & 0x07) << 3) | (bufferUsable[1] >> 5),
-		PacketType: PacketT(bufferUsable[1] & 0x1F),
-	}
 
 	if !crc.VerifyCRC(bufferUsable[:2+size], crcValue) {
 		return Message{}, ErrInvalidCRC
 	}
+
+	msg := Message{
+		Content:    deformatContent(bufferUsable[2 : 2+size]),
+		Sequence:   ((bufferUsable[0] & 0x07) << 3) | (bufferUsable[1] >> 5),
+		PacketType: PacketT(bufferUsable[1] & 0x1F),
+	}
+
+	debug.PrintLog("Conteudo mensagem (CRC: %d): %v\n", crcValue, msg.Content)
 
 	// detectar retransmissão: sequência igual à última recebida com sucesso
 	if ServerState.hasReceivedPkt && msg.Sequence == ServerState.lastReceivedSeq {
@@ -171,9 +277,6 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 	if msg.Sequence != ServerState.SequenceNumber {
 		return Message{}, ErrUnexpectedSequence
 	}
-
-	fmt.Printf("Mensagem capturada (CRC: %d): %s\n", crcValue, msg.String())
-	debug.PrintLog("Conteudo mensagem: %v\n", msg.Content)
 
 	// tudo certo, registrar sequência recebida e incrementar para a próxima mensagem
 	ServerState.lastReceivedSeq = msg.Sequence

@@ -36,12 +36,12 @@ func TestSuccessACK(t *testing.T) {
 		_, err = rawsockets.ReceivePacketWithTimeout(sockServer, 3000)
 		if err == nil {			
 			ackMsg := rawsockets.Message{
-				Content:    "",
+				Content:    nil,
 				Sequence:   rawsockets.ServerState.SequenceNumber,
 				PacketType: rawsockets.Ack,
 			}
 			
-			err = rawsockets.SendMessage(sockServer, ackMsg)
+			err = rawsockets.SendMessage(sockServer, &ackMsg)
 		}
         
         serverDone <- err
@@ -59,9 +59,9 @@ func TestSuccessACK(t *testing.T) {
     defer syscall.Close(sockClient)
 
 	// cliente envia mensagem de teste p/ servidor
-    msgData := rawsockets.CreateMessage("Teste ACK Real", rawsockets.Data)
+    msgData := rawsockets.CreateMessage([]byte("Teste ACK Real"), rawsockets.Data)
 	rawsockets.ServerState.Reset()
-    err = rawsockets.SendMessage(sockClient, msgData)
+    err = rawsockets.SendMessage(sockClient, &msgData)
     if err != nil {
         t.Fatalf("esperava sucesso no envio, mas estourou timeout/erro: %v", err)
     }
@@ -110,12 +110,12 @@ func TestTimeoutACK(t *testing.T) {
 	}
 	defer syscall.Close(sockClient)
 
-	msgData := rawsockets.CreateMessage("Teste ACK com timeout", rawsockets.Data)
+	msgData := rawsockets.CreateMessage([]byte("Teste ACK com timeout"), rawsockets.Data)
 	rawsockets.ServerState.Reset()
 	
 	// Executa SendMessage do cliente separadamente p/ não travar o select do teste
 	go func() {
-		_ = rawsockets.SendMessage(sockClient, msgData)
+		_ = rawsockets.SendMessage(sockClient, &msgData)
 	}()
 
 	select {
@@ -142,10 +142,10 @@ func TestMaxRetriesReached(t *testing.T) {
 	}
 	defer syscall.Close(clientSock)
 
-	msg := rawsockets.CreateMessage("Teste de máximo de tentativas atingido", rawsockets.Data)
+	msg := rawsockets.CreateMessage([]byte("Teste de máximo de tentativas atingido"), rawsockets.Data)
 	rawsockets.ServerState.Reset()
 
-	err = rawsockets.SendMessage(clientSock, msg)
+	err = rawsockets.SendMessage(clientSock, &msg)
 	if err == nil {
 		t.Fatal("esperava erro após atingir o máximo de tentativas, mas envio foi bem-sucedido")
 	}

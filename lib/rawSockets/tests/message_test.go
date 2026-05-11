@@ -15,7 +15,7 @@ func TestSequenceIncrement(t *testing.T) {
 	num := 5
 	messages := make([]rawsockets.Message, num)
 	for i := 0; i < num; i++ {
-		messages[i] = rawsockets.CreateMessage(fmt.Sprintf("Mensagem %d", i), rawsockets.Data)
+		messages[i] = rawsockets.CreateMessage([]byte(fmt.Sprintf("Mensagem %d", i)), rawsockets.Data)
 	}
 
 	valid := true
@@ -44,7 +44,7 @@ func TestReadMessagePacket(t *testing.T) {
 	}
 
 	expectedContent := "ola"
-	if message.Content != expectedContent {
+	if string(message.Content) != expectedContent {
 		t.Fatalf("Teste de leitura de pacote de mensagem falhou: conteúdo esperado '%s', obtido '%s'\n", expectedContent, message.Content)
 	}
 }
@@ -52,7 +52,7 @@ func TestReadMessagePacket(t *testing.T) {
 func TestInvalidCRCTest(t *testing.T) {
 	defer rawsockets.ServerState.Reset()
 
-	msg := rawsockets.CreateMessage("Teste de CRC inválido", rawsockets.Data)
+	msg := rawsockets.CreateMessage([]byte("Teste de CRC inválido"), rawsockets.Data)
 	packet := msg.ToBytes()
 	rawsockets.ServerState.Reset()
 
@@ -72,7 +72,7 @@ func TestInvalidCRCTest(t *testing.T) {
 func TestDuplicateSequence(t *testing.T) {
 	defer rawsockets.ServerState.Reset()
 
-	msg := rawsockets.CreateMessage("Teste de sequência duplicada", rawsockets.Data)
+	msg := rawsockets.CreateMessage([]byte("Teste de sequência duplicada"), rawsockets.Data)
 	packet := msg.ToBytes()
 	rawsockets.ServerState.Reset()
 
@@ -92,7 +92,7 @@ func TestDuplicateSequence(t *testing.T) {
 func TestDuplicateSequenceWithInvalidCRC(t *testing.T) {
 	defer rawsockets.ServerState.Reset()
 
-	msg := rawsockets.CreateMessage("abc", rawsockets.Data)
+	msg := rawsockets.CreateMessage([]byte("abc"), rawsockets.Data)
 	packet := msg.ToBytes()
 	rawsockets.ServerState.Reset()
 
@@ -114,7 +114,7 @@ func TestDuplicateSequenceWithInvalidCRC(t *testing.T) {
 func TestFutureSequence(t *testing.T) {
 	defer rawsockets.ServerState.Reset()
 
-	msg := rawsockets.CreateMessage("Teste de sequência futura", rawsockets.Data)
+	msg := rawsockets.CreateMessage([]byte("Teste de sequência futura"), rawsockets.Data)
 	packet := msg.ToBytes()
 	rawsockets.ServerState.Reset()
 

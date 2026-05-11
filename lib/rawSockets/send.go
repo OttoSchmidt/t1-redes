@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"syscall"
+
+	debug "pacman-redes/lib/debug"
 )
 
 /*
@@ -12,9 +14,12 @@ Envia a mensagem pelo socket especificado. Não possui timeout, retransmissão o
 func sendPacket(sock int, packet Message) error {
 	frame := packet.ToBytes()
 
-	ServerState.lastSentBytes = append([]byte(nil), frame...)
+	// salvar ultima mensagem enviada
+	ServerState.lastSentMessage = packet
 
 	_, err := syscall.Write(sock, frame)
+
+	ServerState.WriteLog(fmt.Sprintf("[MSG] enviado  => %s\n", packet.String()))
 
 	return err
 }
@@ -24,10 +29,12 @@ Reenvia os bytes da última mensagem enviada pelo socket especificado. Útil par
 após receber um pacote duplicado (retransmissão do remetente).
 */
 func ResendLastSent(sock int) error {
-	if len(ServerState.lastSentBytes) == 0 {
+	if ServerState.lastSentMessage.EqualsTo(Message{}) {
 		return fmt.Errorf("nenhuma mensagem enviada anteriormente")
 	}
-	_, err := syscall.Write(sock, ServerState.lastSentBytes)
+
+	frame := ServerState.lastSentMessage.ToBytes()
+	_, err := syscall.Write(sock, frame)
 	return err
 }
 
@@ -52,7 +59,7 @@ func SendMessage(sock int, packet Message) error {
 				return fmt.Errorf("falha ao enviar mensagem: %w", err)
 			}
 
-			fmt.Printf("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, MaxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
+			debug.PrintLog("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, MaxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
 
 			msg, err := ReceivePacketTWithTimeout(sock, timeoutMillis, Ack)
 			
@@ -63,13 +70,20 @@ func SendMessage(sock int, packet Message) error {
 					timeoutMillis = initialTimeoutMillis
 					attempt = 0
 					continue
+				} else if msg.PacketType == Error {
+					// retornar para a funcao que chamou para tratar
+					if string(msg.Content) == "1" {
+						return ErrMissingStorage
+					} else {
+						return ErrWriteFile
+					}
 				}
 			case errors.Is(err, ErrTimeout):
-				fmt.Printf("Sem resposta dentro de %dms; reenviando...\n", timeoutMillis)
+				ServerState.WriteLog(fmt.Sprintf("\t- sem resposta dentro de %4dms; reenviando...\n", timeoutMillis))
 				timeoutMillis = min(timeoutMillis*2, maxTimeoutMillis)
 				continue
 			case err == nil:
-				fmt.Printf("ACK recebido\n")
+				debug.PrintLog("\t- ack recebido\n")
 				return nil
 			default:
 				return fmt.Errorf("erro ao aguardar ACK: %w", err)
@@ -78,4 +92,33 @@ func SendMessage(sock int, packet Message) error {
 
 		return fmt.Errorf("falha ao obter ACK: limite de tentativas atingido")
 	}
+}
+
+/*
+Envia o conteúdo pelo socket especificado. Pode dividir o conteudo em varias mensagens.
+Apos a transmissao, envia uma outra mensagem de tipo End para sinalizar o fim
+*/
+func SendContent(sock int, content []byte, pktType PacketT) error {
+	// separar o conteudo em partes e enviar mensagens
+	for i := 0; i < len(content); i += maxPacketSize {
+		upperBound := i+maxPacketSize
+		if upperBound > len(content) {
+			upperBound = len(content)
+		}
+
+		msg := CreateMessage(content[i:upperBound], pktType)
+		err := SendMessage(sock, msg)
+		if err != nil {
+			return fmt.Errorf("erro ao enviar conteudo: %w\n", err)
+		}
+	}
+
+	// enviar mensagem de fim
+	endMsg := CreateMessage(nil, End)
+	err := SendMessage(sock, endMsg)
+	if err != nil {
+		return fmt.Errorf("erro ao enviar mensagem de fim: %w\n", err)
+	}
+
+	return nil
 }

@@ -1,12 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"syscall"
 
-	debug "pacman-redes/lib/debug"
 	rawsockets "pacman-redes/lib/rawSockets"
 )
 
@@ -19,43 +17,41 @@ func main() {
 	}
 
 	sock, err := rawsockets.CreateSocket(ifaceName)
-	defer syscall.Close(sock)
 	if err != nil {
 		panic(err)
 	}
+	defer syscall.Close(sock)
 
-	buf := make([]byte, 256)
-
-	fmt.Println("Servidor iniciado. Esperando mensagens...")
-	for {
-		msg, err := rawsockets.ReceivePacket(sock, buf)
+	fmt.Println("Servidor iniciado")
+	for i := 0; i < 10; i++ {
+		content := "isso eh uma mensagem maior que 31 bytes. o esperado eh que ele divida em varias mensagens."
+		err := rawsockets.SendContent(sock, []byte(content), rawsockets.Data)
 		if err != nil {
-			if errors.Is(err, rawsockets.ErrDuplicatePacket) {
-				// pacote duplicado (retransmissão após ACK perdido): reenviar último ACK/NACK
-				if resendErr := rawsockets.ResendLastSent(sock); resendErr != nil {
-					debug.PrintLog("Erro ao reenviar resposta para pacote duplicado: %v\n", resendErr)
-				}
-			} else {
-				debug.PrintLog("Erro ao receber pacote: %v\n", err)
-			}
-			continue
-		}
-
-		fmt.Printf("Conteúdo: %s\n\n", msg.Content)
-
-		switch msg.PacketType {
-		case rawsockets.Ack, rawsockets.Nack:
-			continue
-		case rawsockets.Data:
-			reply := rawsockets.CreateMessage("", rawsockets.Ack)
-			if err := rawsockets.SendMessage(sock, reply); err != nil {
-				debug.PrintLog("Erro ao enviar ACK: %v\n", err)
-			}
-		default:
-			reply := rawsockets.CreateMessage("", rawsockets.Nack)
-			if err := rawsockets.SendMessage(sock, reply); err != nil {
-				debug.PrintLog("Erro ao enviar NACK: %v\n", err)
-			}
+			panic(err)
 		}
 	}
+
+	/*
+	file, err := os.OpenFile("files/teste.txt", os.O_RDONLY, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	err = rawsockets.SendFile(sock, 1, file)
+	if err != nil {
+		panic(err)
+	}
+	*/
+
+	file, err := os.OpenFile("files/drone.mp4", os.O_RDONLY, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	err = rawsockets.SendFile(sock, 1, file)
+	
+
+	for {}
+
 }

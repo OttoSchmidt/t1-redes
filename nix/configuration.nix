@@ -21,6 +21,11 @@
     xkbVariant = "nodeadkeys"; # Sem teclas mortas
   };
 
+  # remover console padrao, pois teremos o ptyxis
+  environment.gnome.excludePackages = with pkgs; [
+    gnome-console
+  ];
+
   fonts = {
     fontconfig.enable = true;
     enableDefaultPackages = true;
@@ -46,14 +51,22 @@
     initialPassword = "pacman";
   };
 
+  # auto login
+  services.displayManager.autoLogin.enable  = true;
+  services.displayManager.autoLogin.user = "pacman";
+
+  # sem senha sudo (grupo wheel)
   security.sudo.wheelNeedsPassword = false;
 
-  # Servidores para VM
+  # servidores para vm (transferencia de arquivos)
   services.spice-vdagentd.enable = true;
   services.spice-webdavd.enable = true;
   services.qemuGuest.enable = true;
 
+  # docker
   virtualisation.docker.enable = true;
+
+  programs.wireshark.enable = true;
 
   services.openssh = {
     enable = true;
@@ -63,6 +76,7 @@
     };
   };
 
+  nixpkgs.config.allowUnfree = true;
   environment.systemPackages = with pkgs; [
     git
     go
@@ -71,9 +85,12 @@
     libcap
     iproute2
     pciutils
+    ptyxis
     tcpdump
     vim
+    vscode
     sshfs
+    wireshark
   ];
 
   system.stateVersion = "25.11";
