@@ -12,8 +12,6 @@ import (
 	debug "pacman-redes/lib/debug"
 )
 
-var ErrMissingStorage = errors.New("sem espaco de armazenamento")
-
 func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
 	var fileExt string
 	switch fileType {
@@ -28,12 +26,13 @@ func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
 	}
 
 	// verificar permissoes de arquivo temporario
-	fileName := fmt.Sprintf("pacman-%d-*%s", id, fileExt)
+	fileName := fmt.Sprintf("pacman%d-*%s", id, fileExt)
 	tmpFile, err := os.CreateTemp("/tmp", fileName)
 	if err != nil {
-		os.Remove(fileName)
+		os.Remove(tmpFile.Name())
 		return nil, err
 	}
+	fileName = tmpFile.Name()
 
 	// verificar se ha espaco disponivel
 	var stat unix.Statfs_t
@@ -45,6 +44,17 @@ func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
 		debug.PrintLog("Espaco disponivel: %d bytes; necessario: %d bytes\n", tamAvailable, tam)
 		os.Remove(fileName)
 		return nil, ErrMissingStorage
+	}
+
+	// renomear arquivo
+	newFileName := fmt.Sprintf("/tmp/%d%s", id, fileExt)
+	tmpFile.Close()
+	os.Rename(fileName, newFileName)
+	tmpFile, err = os.OpenFile(newFileName, os.O_RDWR, 0666)
+	if err != nil {
+		os.Remove(fileName)
+		os.Remove(newFileName)
+		return nil, fmt.Errorf("nao foi possivel renomar arquivo")
 	}
 
 	return tmpFile, nil
@@ -66,15 +76,11 @@ func OpenDefaultFileHandler(file string) error {
 	return cmd.Start()
 }
 
-func ReceiveFile(sock int, id int, tam uint, fileType PacketT) (string, error) {
-	tmpFile, err := VerifyFileViability(id, tam, fileType)
-	if err != nil {
-		return "", err
-	}
-
+func ReceiveFile(sock int, file *os.File, tam uint) (string, error) {
 	receivedBytes := uint(0)
 	fileBuffer := make([]byte, tam)
 	buf := make([]byte, 40)
+
 	for receivedBytes < tam {
 		msg, err := ReceivePacket(sock, buf)
 		if err != nil {
@@ -97,7 +103,7 @@ func ReceiveFile(sock int, id int, tam uint, fileType PacketT) (string, error) {
 		}
 
 		if msg.PacketType != Data {
-			os.Remove(tmpFile.Name())
+			os.Remove(file.Name())
 			return "", ErrUnexpectedPacketType
 		}
 
@@ -108,14 +114,14 @@ func ReceiveFile(sock int, id int, tam uint, fileType PacketT) (string, error) {
 	}
 
 	// escrever o buffer de arquivo no arquivo temporario
-	_, err = tmpFile.Write(fileBuffer)
+	_, err := file.Write(fileBuffer)
 	if err != nil {
-		os.Remove(tmpFile.Name())
+		os.Remove(file.Name())
 		return "", err
 	}
 
-	fileName := tmpFile.Name()
-	tmpFile.Close()
+	fileName := file.Name()
+	file.Close()
 
 	os.Chmod(fileName, 0644)
 
