@@ -70,6 +70,13 @@ func SendMessage(sock int, packet Message) error {
 					timeoutMillis = initialTimeoutMillis
 					attempt = 0
 					continue
+				} else if msg.PacketType == Error {
+					// retornar para a funcao que chamou para tratar
+					if string(msg.Content) == "1" {
+						return ErrMissingStorage
+					} else {
+						return ErrWriteFile
+					}
 				}
 			case errors.Is(err, ErrTimeout):
 				ServerState.WriteLog(fmt.Sprintf("\t- sem resposta dentro de %4dms; reenviando...\n", timeoutMillis))
