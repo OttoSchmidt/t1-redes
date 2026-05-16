@@ -76,20 +76,20 @@ func OpenDefaultFileHandler(file string) error {
 	return cmd.Start()
 }
 
-func ReceiveFile(sock int, file *os.File, tam uint) (string, error) {
+func ReceiveFile(file *os.File, tam uint) (string, error) {
 	receivedBytes := uint(0)
 	fileBuffer := make([]byte, tam)
 	buf := make([]byte, 40)
 
 	for receivedBytes < tam {
-		msg, err := ReceivePacket(sock, buf)
+		msg, err := ReceivePacket(buf)
 		if err != nil {
 			debug.PrintLog("Erro ao receber pacote de arquivo: %v\n", err)
 
 			if errors.Is(err, ErrInvalidCRC) {
 				// enviar NACK para solicitar retransmissão
 				nackMsg := CreateMessage(nil, Nack)
-				if sendErr := SendMessage(sock, nackMsg); sendErr != nil {
+				if sendErr := SendMessage(nackMsg); sendErr != nil {
 					debug.PrintLog("Erro ao enviar NACK para pacote com CRC invalido: %v\n", sendErr)
 				}
 			}
@@ -97,7 +97,7 @@ func ReceiveFile(sock int, file *os.File, tam uint) (string, error) {
 		}
 
 		ackMsg := CreateMessage(nil, Ack)
-		if sendErr := SendMessage(sock, ackMsg); sendErr != nil {
+		if sendErr := SendMessage(ackMsg); sendErr != nil {
 			debug.PrintLog("Erro ao enviar ACK para pacote recebido: %v\n", sendErr)
 			continue
 		}
@@ -128,7 +128,7 @@ func ReceiveFile(sock int, file *os.File, tam uint) (string, error) {
 	return fileName, nil
 }
 
-func SendFile(sock int, id int, file *os.File) error {
+func SendFile(id int, file *os.File) error {
 	fileInfo, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("falha ao obter informacoes do arquivo: %w", err)
@@ -157,11 +157,11 @@ func SendFile(sock int, id int, file *os.File) error {
 
 	// enviar pacote cabecalho
 	msg := CreateMessage([]byte(fmt.Sprintf("%c%d", id&0xff, fileInfo.Size())), fileType)
-	err = SendMessage(sock, msg)
+	err = SendMessage(msg)
 	if err != nil {
 		return fmt.Errorf("falha ao enviar cabecalho do arquivo: %w", err)
 	}
 
 	// enviar o conteudo do arquivo
-	return SendContent(sock, content, Data)
+	return SendContent(content, Data)
 }

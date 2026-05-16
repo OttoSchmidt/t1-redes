@@ -12,8 +12,8 @@ import (
 /*
 Recebe um pacote do socket, aguardando indefinidamente
 */
-func ReceivePacket(sock int, buf []byte) (Message, error) {
-	n, addr, err := syscall.Recvfrom(sock, buf, 0)
+func ReceivePacket(buf []byte) (Message, error) {
+	n, addr, err := syscall.Recvfrom(ServerState.Sock, buf, 0)
 	if err != nil {
 		return Message{}, fmt.Errorf("falha ao receber pacote: %w", err)
 	}
@@ -42,7 +42,7 @@ func ReceivePacket(sock int, buf []byte) (Message, error) {
 /*
 Recebe um pacote do socket, aguardando um tempo máximo especificado (timeout)
 */
-func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
+func ReceivePacketWithTimeout(timeoutMillis int) (Message, error) {
 	if timeoutMillis <= 0 {
 		return Message{}, fmt.Errorf("timeout invalido: %d", timeoutMillis)
 	}
@@ -61,11 +61,11 @@ func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
 		}
 
 		tv := syscall.NsecToTimeval(remaining.Nanoseconds())
-		if err := syscall.SetsockoptTimeval(sock, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv); err != nil {
+		if err := syscall.SetsockoptTimeval(ServerState.Sock, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv); err != nil {
 			return Message{}, fmt.Errorf("falha ao configurar timeout do socket: %w", err)
 		}
 
-		msg, err := ReceivePacket(sock, buf)
+		msg, err := ReceivePacket(buf)
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrIgnoredPacket),
@@ -87,7 +87,7 @@ func ReceivePacketWithTimeout(sock int, timeoutMillis int) (Message, error) {
 /*
 Recebe um pacote do socket, aguardando um tempo máximo especificado (timeout) e filtrando por um tipo especifico.
 */
-func ReceivePacketTWithTimeout(sock int, timeoutMillis int, expectedType PacketT) (Message, error) {
+func ReceivePacketTWithTimeout(timeoutMillis int, expectedType PacketT) (Message, error) {
 	deadline := time.Now().Add(time.Duration(timeoutMillis) * time.Millisecond)
 
 	remaining := time.Until(deadline)
@@ -95,7 +95,7 @@ func ReceivePacketTWithTimeout(sock int, timeoutMillis int, expectedType PacketT
 		return Message{}, ErrTimeout
 	}
 
-	msg, err := ReceivePacketWithTimeout(sock, int(remaining/time.Millisecond))
+	msg, err := ReceivePacketWithTimeout(int(remaining/time.Millisecond))
 	switch {
 	case errors.Is(err, ErrTimeout):
 		return Message{}, ErrTimeout
@@ -111,56 +111,58 @@ func ReceivePacketTWithTimeout(sock int, timeoutMillis int, expectedType PacketT
 	
 }
 
-func ReceiveContent(sock int, buf []byte) ([]byte, error) {
+func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 	messageCompleted := false
+	var packetReceived PacketT
 	content := make([]byte, 0)
 
 	for !messageCompleted {
-		msg, err := ReceivePacket(sock, buf)
+		msg, err := ReceivePacket(buf)
+		packetReceived = msg.PacketType
 		if err != nil {
 			if errors.Is(err, ErrDuplicatePacket) {
 				// pacote duplicado. se o ultimo pacote enviado foi ACK, enviar novamente e ignorar mensagem atual
 				if ServerState.lastSentMessage.PacketType == Ack {
-					if resendErr := ResendLastSent(sock); resendErr != nil {
-						return nil, fmt.Errorf("erro ao reenviar ultimo pacote (ack): %v\n", resendErr)
+					if resendErr := ResendLastSent(); resendErr != nil {
+						return nil, packetReceived, fmt.Errorf("erro ao reenviar ultimo pacote (ack): %v\n", resendErr)
 					}
-					return nil, nil
+					return nil, packetReceived, nil
 				}
 			} else if errors.Is(err, ErrInvalidCRC) {
 				// enviar nack e esperar pela mensagem correta
-				if resendErr := ResendLastSent(sock); resendErr != nil {
-					return nil, fmt.Errorf("erro ao enviar nack: %v\n", resendErr)
+				if resendErr := ResendLastSent(); resendErr != nil {
+					return nil, packetReceived, fmt.Errorf("erro ao enviar nack: %v\n", resendErr)
 				}
 				continue
 			} else if errors.Is(err, ErrIgnoredPacket) || errors.Is(err, ErrInvalidStartMarker) {
 				continue
 			} else {
-				return nil, err
+				return nil, packetReceived, err
 			}
 		}
 
 		// enviar ack
-		if msg.PacketType != Ack && msg.PacketType != Nack && 
-			msg.PacketType != JpgFile && msg.PacketType != Mp4File &&
-			msg.PacketType != TxtFile {
+		if packetReceived != Ack && packetReceived != Nack && 
+			packetReceived != JpgFile && packetReceived != Mp4File &&
+			packetReceived != TxtFile {
 			replyMsg := CreateMessage(nil, Ack)
-			if err = SendMessage(sock, replyMsg); err != nil {
+			if err = SendMessage(replyMsg); err != nil {
 				debug.PrintLog("erro ao enviar ack: %v\n", err)
 			}
 		}
 
-		switch msg.PacketType {
+		switch packetReceived {
 		case Ack, Nack:
-			return nil, nil
+			return nil, packetReceived, nil
 		case Data:
 			content = append(content, msg.Content...)
 		case TxtFile, JpgFile, Mp4File:
 			id, tam, err := ParseFileHeader(msg.Content)
 			if err != nil {
-				return nil, fmt.Errorf("erro ao interpretar cabecalho de arquivo: %v\n", err)
+				return nil, packetReceived, fmt.Errorf("erro ao interpretar cabecalho de arquivo: %v\n", err)
 			}
 
-			file, err := VerifyFileViability(id, tam, msg.PacketType)
+			file, err := VerifyFileViability(id, tam, packetReceived)
 			if err != nil {
 				// enviar pacote de erro
 				codeError := "2"
@@ -172,22 +174,22 @@ func ReceiveContent(sock int, buf []byte) ([]byte, error) {
 				}	
 
 				replyMsg := CreateMessage([]byte(codeError), Error)
-				if err = SendMessage(sock, replyMsg); err != nil {
+				if err = SendMessage(replyMsg); err != nil {
 					debug.PrintLog("erro ao enviar erro: %v\n", err)
 				}
 
 			} else {
 				// enviar ack
 				replyMsg := CreateMessage(nil, Ack)
-				if err = SendMessage(sock, replyMsg); err != nil {
+				if err = SendMessage(replyMsg); err != nil {
 					debug.PrintLog("erro ao enviar ack: %v\n", err)
 				}
 			}
 
 			// ler os pacotes de dado do arquivo
-			fileName, err := ReceiveFile(sock, file, tam)
+			fileName, err := ReceiveFile(file, tam)
 			if err != nil {
-				return nil, fmt.Errorf("erro ao receber arquivo: %v\n", err)
+				return nil, packetReceived, fmt.Errorf("erro ao receber arquivo: %v\n", err)
 			}
 
 			fmt.Printf("arquivo recebido e salvo em: %s\n", fileName)
@@ -201,10 +203,10 @@ func ReceiveContent(sock int, buf []byte) ([]byte, error) {
 		case End:
 			messageCompleted = true
 		default:
-			return nil, fmt.Errorf("tipo de mensagem desconhecido (%d)\n", msg.PacketType)
+			return nil, packetReceived, fmt.Errorf("tipo de mensagem desconhecido (%d)\n", packetReceived)
 		}
 
 	}
 
-	return content, nil
+	return content, packetReceived, nil
 }

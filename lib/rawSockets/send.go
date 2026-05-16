@@ -11,13 +11,13 @@ import (
 /*
 Envia a mensagem pelo socket especificado. Não possui timeout, retransmissão ou verificação de resposta.
 */
-func sendPacket(sock int, packet Message) error {
+func sendPacket(packet Message) error {
 	frame := packet.ToBytes()
 
 	// salvar ultima mensagem enviada
 	ServerState.lastSentMessage = packet
 
-	_, err := syscall.Write(sock, frame)
+	_, err := syscall.Write(ServerState.Sock, frame)
 
 	ServerState.WriteLog(fmt.Sprintf("[MSG] enviado  => %s\n", packet.String()))
 
@@ -28,13 +28,13 @@ func sendPacket(sock int, packet Message) error {
 Reenvia os bytes da última mensagem enviada pelo socket especificado. Útil para reenviar ACK/NACK
 após receber um pacote duplicado (retransmissão do remetente).
 */
-func ResendLastSent(sock int) error {
+func ResendLastSent() error {
 	if ServerState.lastSentMessage.EqualsTo(Message{}) {
 		return fmt.Errorf("nenhuma mensagem enviada anteriormente")
 	}
 
 	frame := ServerState.lastSentMessage.ToBytes()
-	_, err := syscall.Write(sock, frame)
+	_, err := syscall.Write(ServerState.Sock, frame)
 	return err
 }
 
@@ -42,9 +42,9 @@ func ResendLastSent(sock int) error {
 Envia a mensagem pelo socket especificado. Se o tipo da mensagem for ACK, NACK ou Error, é enviada sem aguardar resposta.
 Para outros tipos, implementa um mecanismo de retransmissão com timeout e limite de tentativas, aguardando alguma resposta.
 */
-func SendMessage(sock int, packet Message) error {
+func SendMessage(packet Message) error {
 	if (packet.PacketType == Ack || packet.PacketType == Nack || packet.PacketType == Error) {
-		err := sendPacket(sock, packet)
+		err := sendPacket(packet)
 		if err != nil {
 			return fmt.Errorf("falha ao enviar mensagem: %w", err)
 		}
@@ -54,14 +54,14 @@ func SendMessage(sock int, packet Message) error {
 		timeoutMillis := initialTimeoutMillis
 
 		for attempt := 1; attempt <= MaxAttempts; attempt++ {
-			err := sendPacket(sock, packet)
+			err := sendPacket(packet)
 			if err != nil {
 				return fmt.Errorf("falha ao enviar mensagem: %w", err)
 			}
 
 			debug.PrintLog("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, MaxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
 
-			msg, err := ReceivePacketTWithTimeout(sock, timeoutMillis, Ack)
+			msg, err := ReceivePacketTWithTimeout(timeoutMillis, Ack)
 			
 			switch {
 			case errors.Is(err, ErrUnexpectedPacketType):
@@ -98,7 +98,7 @@ func SendMessage(sock int, packet Message) error {
 Envia o conteúdo pelo socket especificado. Pode dividir o conteudo em varias mensagens.
 Apos a transmissao, envia uma outra mensagem de tipo End para sinalizar o fim
 */
-func SendContent(sock int, content []byte, pktType PacketT) error {
+func SendContent(content []byte, pktType PacketT) error {
 	// separar o conteudo em partes e enviar mensagens
 	for i := 0; i < len(content); i += maxPacketSize {
 		upperBound := i+maxPacketSize
@@ -107,7 +107,7 @@ func SendContent(sock int, content []byte, pktType PacketT) error {
 		}
 
 		msg := CreateMessage(content[i:upperBound], pktType)
-		err := SendMessage(sock, msg)
+		err := SendMessage(msg)
 		if err != nil {
 			return fmt.Errorf("erro ao enviar conteudo: %w\n", err)
 		}
@@ -115,7 +115,7 @@ func SendContent(sock int, content []byte, pktType PacketT) error {
 
 	// enviar mensagem de fim
 	endMsg := CreateMessage(nil, End)
-	err := SendMessage(sock, endMsg)
+	err := SendMessage(endMsg)
 	if err != nil {
 		return fmt.Errorf("erro ao enviar mensagem de fim: %w\n", err)
 	}

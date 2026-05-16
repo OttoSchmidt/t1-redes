@@ -87,6 +87,7 @@ func (p PacketT) String() string {
 // ========== Estado Servidor ==========
 
 type State struct {
+	Sock            int
 	logQueue        chan string
 	SequenceNumber  uint8
 	lastReceivedSeq uint8
