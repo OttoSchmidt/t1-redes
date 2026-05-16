@@ -47,6 +47,7 @@ const (
 	MoveDown  PacketT = 13
 	Error     PacketT = 15
 	End       PacketT = 16
+	EndConn   PacketT = 17
 )
 
 func (p PacketT) String() string {
@@ -78,7 +79,9 @@ func (p PacketT) String() string {
 	case Error:
 		return "erro"
 	case End:
-		return "fim"
+		return "fim trans"
+	case EndConn:
+		return "fim canal"
 	}
 	return "indefinido"
 }

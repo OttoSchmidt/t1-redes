@@ -200,7 +200,7 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 			}
 
 			messageCompleted = true
-		case End:
+		case Init, Visualize, MoveUp, MoveLeft, MoveRight, MoveDown, End, EndConn:
 			messageCompleted = true
 		default:
 			return nil, packetReceived, fmt.Errorf("tipo de mensagem desconhecido (%d)\n", packetReceived)
