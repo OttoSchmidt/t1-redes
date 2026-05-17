@@ -114,7 +114,7 @@ func (g *Grid) ToString(center Position, radius uint8) string {
 	for i := int(center.y) + int(radius) + 1; i < 40; i++ { // vazio inferior
 		gridComplete.WriteString(fmt.Sprintf("██%s", BLACK)) // lado esquerdo frame
 		for i := 0; i < 80; i++ { // fundo mapa
-			gridComplete.WriteString("X")
+			gridComplete.WriteString("█")
 		}
 		gridComplete.WriteString(fmt.Sprintf("%s██\n", NC)) // lado direito frame
 	}
@@ -197,7 +197,7 @@ func (s *GameState) ReadMapCsv(csv string) error {
 	s.GameMap.grid = make(Grid, 40)
 	s.GameMap.ghosts = make([]Ghost, 0)
 	s.GameMap.coins = make([]Coin, 0)
-	s.GameMap.windowSize = 40
+	s.GameMap.windowSize = 1
 
 	lines := strings.Split(string(file), "\n")
 	for i := 0; i < 40; i++ {
