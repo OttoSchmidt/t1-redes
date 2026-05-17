@@ -99,17 +99,25 @@ Envia o conteúdo pelo socket especificado. Pode dividir o conteudo em varias me
 Apos a transmissao, envia uma outra mensagem de tipo End para sinalizar o fim
 */
 func SendContent(content []byte, pktType PacketT) error {
-	// separar o conteudo em partes e enviar mensagens
-	for i := 0; i < len(content); i += maxPacketSize {
-		upperBound := i+maxPacketSize
-		if upperBound > len(content) {
-			upperBound = len(content)
-		}
-
-		msg := CreateMessage(content[i:upperBound], pktType)
+	if len(content) == 0 {
+		msg := CreateMessage(nil, pktType)
 		err := SendMessage(msg)
 		if err != nil {
 			return fmt.Errorf("erro ao enviar conteudo: %w\n", err)
+		}
+	} else {
+		// separar o conteudo em partes e enviar mensagens
+		for i := 0; i < len(content); i += maxPacketSize {
+			upperBound := i+maxPacketSize
+			if upperBound > len(content) {
+				upperBound = len(content)
+			}
+
+			msg := CreateMessage(content[i:upperBound], pktType)
+			err := SendMessage(msg)
+			if err != nil {
+				return fmt.Errorf("erro ao enviar conteudo: %w\n", err)
+			}
 		}
 	}
 

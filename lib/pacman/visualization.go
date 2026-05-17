@@ -24,7 +24,7 @@ func randomPosition(ent Entity, m Map) {
 		line := rand.IntN(40)
 		column := rand.IntN(40)
 
-		if m.grid[line][column] != "X" {
+		if m.grid[line][column] != 'X' {
 			ent.setPos(line, column)
 			break
 		}
@@ -43,11 +43,11 @@ func (m *Grid) insertEntities(pacman Pacman, ghosts []Ghost, coins []Coin) {
 }
 
 // retornar mapa considerando o raio do pacman
-func getMapWindow(g Grid, pacman Pacman, windowSize int) Grid {
-	sl := max(int(pacman.ent.pos.y) - windowSize, 0)
-	el := min(int(pacman.ent.pos.y) + windowSize, 39)
-	sc := max(int(pacman.ent.pos.x) - windowSize, 0)
-	ec := min(int(pacman.ent.pos.x) + windowSize, 39)
+func getMapWindow(g Grid, pacman Pacman, windowSize uint8) Grid {
+	sl := max(int(pacman.ent.pos.y) - int(windowSize), 0)
+	el := min(int(pacman.ent.pos.y) + int(windowSize), 39)
+	sc := max(int(pacman.ent.pos.x) - int(windowSize), 0)
+	ec := min(int(pacman.ent.pos.x) + int(windowSize), 39)
 
 	sub := g[sl:(el+1)]
 	for i := range sub {
@@ -57,8 +57,7 @@ func getMapWindow(g Grid, pacman Pacman, windowSize int) Grid {
 	return sub
 }
 
-func (g *Grid) ToString(center Position) string {
-	windowSize := len(*g)/2
+func (g *Grid) ToString(center Position, radius uint8) string {
 	var gridComplete strings.Builder
 
 	for i := 0; i < 84; i++ { // topo do frame
@@ -66,7 +65,7 @@ func (g *Grid) ToString(center Position) string {
 	}
 	gridComplete.WriteString("\n")
 
-	for i := int(center.y) - windowSize; i > 0; i-- { // vazio superior
+	for i := int(center.y) - int(radius); i > 0; i-- { // vazio superior
 		gridComplete.WriteString(fmt.Sprintf("██%s", BLACK)) // lado esquerdo frame
 		for i := 0; i < 80; i++ { // fundo do mapa
 			gridComplete.WriteString("█")
@@ -75,23 +74,47 @@ func (g *Grid) ToString(center Position) string {
 	}
 
 	for _, line := range *g { // centro
-		gridComplete.WriteString("██") // frame esquerdo
-		for i := int(center.x) - windowSize; i > 0; i-- { // vazio esquerdo
-			gridComplete.WriteString(fmt.Sprintf("%s██%s", BLACK, NC))
+		gridComplete.WriteString(fmt.Sprintf("██%s", BLACK)) // frame esquerdo
+		for i := int(center.x) - int(radius); i > 0; i-- { // vazio esquerdo
+			gridComplete.WriteString("██")
 		}
+		gridComplete.WriteString(NC)
+
 		for _, c := range line { // conteudo mapa
-			gridComplete.WriteString(c)
+			var element string
+			switch c {
+			case ' ':
+				element = fmt.Sprintf("%s██%s", BLACK, NC)
+			case 'X':
+				element = "██"
+			case 'P':
+				element = fmt.Sprintf("%s P%s", YELLOW, NC)
+			case 'C':
+				element = fmt.Sprintf("%s C%s", YELLOW, NC)
+			case 'Y':
+				element = fmt.Sprintf("%s Y%s", YELLOW, NC)
+			case 'R':
+				element = fmt.Sprintf("%s R%s", RED, NC)
+			case 'G':
+				element = fmt.Sprintf("%s G%s", GREEN, NC)
+			case 'B':
+				element = fmt.Sprintf("%s B%s", BLUE, NC)
+			}
+
+			gridComplete.WriteString(element)
 		}
-		for i := int(center.x) + windowSize; i < 40; i++ { // vazio direito
-			gridComplete.WriteString(fmt.Sprintf("%s██%s", BLACK, NC))
+
+		gridComplete.WriteString(BLACK)
+		for i := int(center.x) + int(radius) + 1; i < 40; i++ { // vazio direito
+			gridComplete.WriteString("██")
 		}
-		gridComplete.WriteString("██\n") // frame direito
+		gridComplete.WriteString(fmt.Sprintf("%s██\n", NC)) // frame direito
 	}
 
-	for i := int(center.y) + windowSize; i < 40; i++ { // vazio inferior
+	for i := int(center.y) + int(radius) + 1; i < 40; i++ { // vazio inferior
 		gridComplete.WriteString(fmt.Sprintf("██%s", BLACK)) // lado esquerdo frame
 		for i := 0; i < 80; i++ { // fundo mapa
-			gridComplete.WriteString("█")
+			gridComplete.WriteString("X")
 		}
 		gridComplete.WriteString(fmt.Sprintf("%s██\n", NC)) // lado direito frame
 	}
@@ -109,14 +132,14 @@ func (m *Map) ToString() string {
 	// copiar mapa
 	filledMap := make(Grid, len((*m).grid))
 	for i := range filledMap {
-		filledMap[i] = make([]string, len((*m).grid[i]))
+		filledMap[i] = make([]byte, len((*m).grid[i]))
 		copy(filledMap[i], (*m).grid[i])
 	}
 
 	filledMap.insertEntities(m.pacman, m.ghosts, m.coins)
 	windowedMap := getMapWindow(filledMap, m.pacman, m.windowSize)
 
-	return windowedMap.ToString(m.pacman.ent.pos)
+	return windowedMap.ToString(m.pacman.ent.pos, m.windowSize)
 }
 
 // converter visualizacao do mapa com entidades para vetor de bytes
@@ -125,7 +148,7 @@ func (m *Map) ToBytes() []byte {
 	// copiar mapa
 	filledMap := make(Grid, len((*m).grid))
 	for i := range filledMap {
-		filledMap[i] = make([]string, len((*m).grid[i]))
+		filledMap[i] = make([]byte, len((*m).grid[i]))
 		copy(filledMap[i], (*m).grid[i])
 	}
 
@@ -134,50 +157,34 @@ func (m *Map) ToBytes() []byte {
 
 	// converter matriz para vetor
 	var map1D []byte
-	map1D = append(map1D, uint8(len(windowedMap)), uint8(m.pacman.ent.pos.x), uint8(m.pacman.ent.pos.y))
+	map1D = append(map1D, uint8(len(windowedMap)), uint8(m.pacman.ent.pos.x), uint8(m.pacman.ent.pos.y), uint8(m.windowSize))
 	for _, l := range windowedMap {
-		for _, c := range l {
-			map1D = append(map1D, []byte(c)...)
-			map1D = append(map1D, 0x0)
-		}
+		map1D = append(map1D, l...)
 	}
 
 	return map1D
 }
 
-func GridFromBytes(stream []byte) (Grid, Position) {
+func GridFromBytes(stream []byte) (Grid, Position, uint8) {
+	if len(stream) < 4 {
+		return nil, Position{}, 0
+	}
+
+	map1D := stream[4:]
 	numLines := uint8(stream[0])
+	numColumns := (len(map1D))/int(numLines)
 	center := Position{
 		x: uint8(stream[1]),
 		y: uint8(stream[2]),
 	}
 
-	map1D := stream[3:]
-
-	// extrair celulas do mapa (substrings)
-	substringStart := 0
-	substringSize := 0
-	cells := make([]string, 0)
-	for i := 0; i < len(map1D); i++ {
-		if map1D[i] != 0x0 {
-			substringSize++
-		} else {
-			cell := map1D[substringStart:substringStart+substringSize]
-			cells = append(cells, string(cell))
-
-			substringStart = i+1
-			substringSize = 0
-		}
-	}
-
 	grid := make(Grid, numLines)
-	numColumns := len(cells)/int(numLines)
 	for i := range grid {
-		grid[i] = make([]string, numColumns)
-		copy(grid[i], cells[i*numColumns:(i+1)*numColumns+1])
+		grid[i] = make([]byte, numColumns)
+		copy(grid[i], map1D[i*numColumns:(i+1)*numColumns+1])
 	}
 
-	return grid, center
+	return grid, center, stream[3]
 }
 
 // ler mapa e entidades de um csv
@@ -190,11 +197,11 @@ func (s *GameState) ReadMapCsv(csv string) error {
 	s.GameMap.grid = make(Grid, 40)
 	s.GameMap.ghosts = make([]Ghost, 0)
 	s.GameMap.coins = make([]Coin, 0)
-	s.GameMap.windowSize = 1
+	s.GameMap.windowSize = 40
 
 	lines := strings.Split(string(file), "\n")
 	for i := 0; i < 40; i++ {
-		s.GameMap.grid[i] = make([]string, 40)
+		s.GameMap.grid[i] = make([]byte, 40)
 		cells := strings.Split(string(lines[i]), ";")
 		if len(cells) != 40 {
 			return fmt.Errorf(".csv com quant. colunas erradas (atual: %d | esperado: 40) na linha %d\n", len(cells), i+1)
@@ -203,9 +210,9 @@ func (s *GameState) ReadMapCsv(csv string) error {
 		for j, c := range cells {
 			switch c {
 			case "X", "x":
-				s.GameMap.grid[i][j] = "██"
+				s.GameMap.grid[i][j] = 'X'
 			case "0":
-				s.GameMap.grid[i][j] = fmt.Sprintf("%s██%s", BLACK, NC)
+				s.GameMap.grid[i][j] = ' '
 			case "P", "p":
 				p, err := createPacman(j, i)
 				if err != nil {

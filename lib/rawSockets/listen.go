@@ -113,56 +113,59 @@ func ReceivePacketTWithTimeout(timeoutMillis int, expectedType PacketT) (Message
 
 func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 	messageCompleted := false
-	var packetReceived PacketT
+	firstPktTypeReceived := Ack
 	content := make([]byte, 0)
 
 	for !messageCompleted {
 		msg, err := ReceivePacket(buf)
-		packetReceived = msg.PacketType
+		if firstPktTypeReceived == Ack {
+			firstPktTypeReceived = msg.PacketType
+		}
+
 		if err != nil {
 			if errors.Is(err, ErrDuplicatePacket) {
 				// pacote duplicado. se o ultimo pacote enviado foi ACK, enviar novamente e ignorar mensagem atual
 				if ServerState.lastSentMessage.PacketType == Ack {
 					if resendErr := ResendLastSent(); resendErr != nil {
-						return nil, packetReceived, fmt.Errorf("erro ao reenviar ultimo pacote (ack): %v\n", resendErr)
+						return nil, firstPktTypeReceived, fmt.Errorf("erro ao reenviar ultimo pacote (ack): %v\n", resendErr)
 					}
-					return nil, packetReceived, nil
+					return nil, firstPktTypeReceived, nil
 				}
 			} else if errors.Is(err, ErrInvalidCRC) {
 				// enviar nack e esperar pela mensagem correta
 				if resendErr := ResendLastSent(); resendErr != nil {
-					return nil, packetReceived, fmt.Errorf("erro ao enviar nack: %v\n", resendErr)
+					return nil, firstPktTypeReceived, fmt.Errorf("erro ao enviar nack: %v\n", resendErr)
 				}
 				continue
 			} else if errors.Is(err, ErrIgnoredPacket) || errors.Is(err, ErrInvalidStartMarker) {
 				continue
 			} else {
-				return nil, packetReceived, err
+				return nil, firstPktTypeReceived, err
 			}
 		}
 
 		// enviar ack
-		if packetReceived != Ack && packetReceived != Nack && 
-			packetReceived != JpgFile && packetReceived != Mp4File &&
-			packetReceived != TxtFile {
+		if msg.PacketType != Ack && msg.PacketType != Nack && 
+			msg.PacketType != JpgFile && msg.PacketType != Mp4File &&
+			msg.PacketType != TxtFile {
 			replyMsg := CreateMessage(nil, Ack)
 			if err = SendMessage(replyMsg); err != nil {
 				debug.PrintLog("erro ao enviar ack: %v\n", err)
 			}
 		}
 
-		switch packetReceived {
+		switch msg.PacketType {
 		case Ack, Nack:
-			return nil, packetReceived, nil
-		case Data:
+			return nil, msg.PacketType, nil
+		case Data, Init, Visualize:
 			content = append(content, msg.Content...)
 		case TxtFile, JpgFile, Mp4File:
 			id, tam, err := ParseFileHeader(msg.Content)
 			if err != nil {
-				return nil, packetReceived, fmt.Errorf("erro ao interpretar cabecalho de arquivo: %v\n", err)
+				return nil, firstPktTypeReceived, fmt.Errorf("erro ao interpretar cabecalho de arquivo: %v\n", err)
 			}
 
-			file, err := VerifyFileViability(id, tam, packetReceived)
+			file, err := VerifyFileViability(id, tam, msg.PacketType)
 			if err != nil {
 				// enviar pacote de erro
 				codeError := "2"
@@ -189,24 +192,26 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 			// ler os pacotes de dado do arquivo
 			fileName, err := ReceiveFile(file, tam)
 			if err != nil {
-				return nil, packetReceived, fmt.Errorf("erro ao receber arquivo: %v\n", err)
+				return nil, firstPktTypeReceived, fmt.Errorf("erro ao receber arquivo: %v\n", err)
 			}
 
-			fmt.Printf("arquivo recebido e salvo em: %s\n", fileName)
+			ServerState.WriteLog(fmt.Sprintf("\t- arquivo recebido e salvo em: %s\n", fileName))
 
 			// abrir arquivo com handler padrao do sistema
 			if err := OpenDefaultFileHandler(fileName); err != nil {
-				fmt.Printf("erro ao abrir arquivo com handler padrao: %v\n", err)
+				ServerState.WriteLog(fmt.Sprintf("\t- erro ao abrir arquivo com handler padrao: %v\n", err))
 			}
 
 			messageCompleted = true
-		case Init, Visualize, MoveUp, MoveLeft, MoveRight, MoveDown, End, EndConn:
+		case End, EndConn:
 			messageCompleted = true
+		case MoveUp, MoveLeft, MoveRight, MoveDown:
+			continue
 		default:
-			return nil, packetReceived, fmt.Errorf("tipo de mensagem desconhecido (%d)\n", packetReceived)
+			return nil, firstPktTypeReceived, fmt.Errorf("tipo de mensagem desconhecido (%d)\n", msg.PacketType)
 		}
 
 	}
 
-	return content, packetReceived, nil
+	return content, firstPktTypeReceived, nil
 }

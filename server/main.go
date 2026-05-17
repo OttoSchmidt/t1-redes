@@ -21,7 +21,7 @@ func main() {
 		if len(os.Args) > 2 {
 			csvMap = os.Args[2]
 		}
-	}	
+	}
 
 	// iniciar socket
 	err := rawsockets.CreateSocket(ifaceName)

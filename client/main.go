@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"pacman-redes/lib/pacman"
+	pacman "pacman-redes/lib/pacman"
 	rawsockets "pacman-redes/lib/rawSockets"
 )
 
@@ -36,10 +36,8 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "w", "a", "s", "d":
 			sendMovement(key)
-			return m, nil
+			return getNewMap(m), nil
 		}
-	case tickMsg:
-		return getNewMap(m), nil
 	}
 
 	return m, nil
@@ -56,12 +54,12 @@ func getNewMap(oldModel model) model {
 
 	content, packetType, err := rawsockets.ReceiveContent(buf)
 	if err != nil {
-		fmt.Printf("erro ao receber conteudo:\n\t- %v\n", err)
+		rawsockets.ServerState.WriteLog(fmt.Sprintf("\t- erro ao receber conteudo:\n\t- %v\n", err))
 	}
 
 	if packetType == rawsockets.Init || packetType == rawsockets.Visualize {
-		grid, center := pacman.GridFromBytes(content)
-		return model(grid.ToString(center))
+		grid, center, radius := pacman.GridFromBytes(content)
+		return model(grid.ToString(center, radius))
 	}
 
 	return oldModel
@@ -82,9 +80,10 @@ func sendMovement(direcao string) {
 		return
 	}
 
+	// enviar direcao
 	err := rawsockets.SendContent(nil, keyType)
 	if (err != nil) {
-		fmt.Printf("erro ao enviar movimento ao servidor: %s\n", err.Error())
+		rawsockets.ServerState.WriteLog(fmt.Sprintf("\t- erro ao enviar movimento ao servidor: %s\n", err.Error()))
 	}
 }
 
@@ -102,9 +101,12 @@ func main() {
 		panic(err)
 	}
 
-	p := tea.NewProgram(model("Carregando mapa..."))
+	initMap := getNewMap("")
+
+	p := tea.NewProgram(model(initMap))
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
+
 	fmt.Printf("encerrando...\n");
 }

@@ -9,11 +9,11 @@ const BLUE = "\033[34m"
 const BLACK = "\033[30m"
 const NC = "\033[0m"
 
-type Grid [][]string
+type Grid [][]byte
 
 type Map struct {
 	grid Grid
-	windowSize int
+	windowSize uint8
 
 	pacman Pacman
 	ghosts []Ghost
@@ -27,7 +27,7 @@ type GameState struct {
 
 func (gs *GameState) IncrementRound() {
 	gs.round++
-	if gs.round % 5 == 0 {
+	if gs.round % 5 == 0 && gs.GameMap.windowSize < 255 {
 		gs.GameMap.windowSize++
 	}
 }
@@ -38,7 +38,7 @@ type Position struct {
 
 type Entity struct {
 	pos Position
-	symbol string	
+	symbol byte	
 }
 
 func (e *Entity) setPos(x, y int) {
@@ -53,7 +53,7 @@ type Pacman struct {
 func createPacman(x, y int) (Pacman, error) {
 	pacman := Pacman{
 		ent: Entity{
-			symbol: fmt.Sprintf("%s P%s", YELLOW, NC),
+			symbol: 'P',
 		},
 	}
 	pacman.ent.setPos(x, y)
@@ -66,21 +66,9 @@ type Ghost struct {
 }
 
 func createGhost(x, y int, s byte) (Ghost, error) {
-	var color string
-	switch s {
-	case 'Y':
-		color = YELLOW
-	case 'B':
-		color = BLUE
-	case 'R':
-		color = RED
-	case 'G':
-		color = GREEN
-	}
-
 	g := Ghost {
 		ent: Entity{
-			symbol: fmt.Sprintf("%s %s%s", color, string(s), NC),
+			symbol: s,
 		},
 	}
 	g.ent.setPos(x, y)
@@ -109,7 +97,7 @@ func createCoin(x, y int, id byte) (Coin, error) {
 	file := fmt.Sprintf("./files/%s.%s", string(id), ext)
 	coin := Coin {
 		ent: Entity{
-			symbol: fmt.Sprintf("%s C%s", YELLOW, NC),
+			symbol: 'C',
 		},
 		fileName: file,
 	}
