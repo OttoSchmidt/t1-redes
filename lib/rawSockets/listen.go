@@ -118,7 +118,8 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 
 	for !messageCompleted {
 		msg, err := ReceivePacket(buf)
-		if firstPktTypeReceived == Ack {
+
+		if firstPktTypeReceived == Ack && msg.PacketType != PacketT(0) {
 			firstPktTypeReceived = msg.PacketType
 		}
 
@@ -137,7 +138,8 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 					return nil, firstPktTypeReceived, fmt.Errorf("erro ao enviar nack: %v\n", resendErr)
 				}
 				continue
-			} else if errors.Is(err, ErrIgnoredPacket) || errors.Is(err, ErrInvalidStartMarker) {
+			} else if errors.Is(err, ErrIgnoredPacket) || errors.Is(err, ErrInvalidStartMarker) || 
+				errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EINTR) {
 				continue
 			} else {
 				return nil, firstPktTypeReceived, err
