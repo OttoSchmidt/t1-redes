@@ -16,11 +16,11 @@ func VerifyFileViability(id byte, tam uint, fileType PacketT) (*os.File, error) 
 	var fileExt string
 	switch fileType {
 	case TxtFile:
-		fileExt = ".txt"
+		fileExt = "txt"
 	case JpgFile:
-		fileExt = ".jpg"
+		fileExt = "jpg"
 	case Mp4File:
-		fileExt = ".mp4"
+		fileExt = "mp4"
 	default:
 		return nil, fmt.Errorf("tipo de arquivo invalido: %d", fileType)
 	}
@@ -47,7 +47,7 @@ func VerifyFileViability(id byte, tam uint, fileType PacketT) (*os.File, error) 
 	}
 
 	// renomear arquivo
-	newFileName := fmt.Sprintf("/tmp/%d%s", id, fileExt)
+	newFileName := fmt.Sprintf("/tmp/%c.%s", id, fileExt)
 	tmpFile.Close()
 	os.Rename(fileName, newFileName)
 	tmpFile, err = os.OpenFile(newFileName, os.O_RDWR, 0666)
@@ -156,7 +156,7 @@ func SendFile(id byte, file *os.File) error {
 	}
 
 	// enviar pacote cabecalho
-	fmt.Printf("arquivo enviar: %s\n", fmt.Sprintf("%c%d", id, fileInfo.Size()))
+	fmt.Printf("arquivo enviar: %s\n", fmt.Sprintf("%c-%d", id, fileInfo.Size()))
 	msg := CreateMessage([]byte(fmt.Sprintf("%c-%d", id, fileInfo.Size())), fileType)
 	err = SendMessage(msg)
 	if err != nil {
