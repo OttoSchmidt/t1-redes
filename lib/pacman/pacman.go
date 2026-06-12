@@ -80,6 +80,7 @@ func createGhost(x, y int, s byte) (Ghost, error) {
 
 type Coin struct {
 	ent      Entity
+	id 		 byte
 	fileName string
 }
 
@@ -104,6 +105,7 @@ func createCoin(x, y int, id byte) (Coin, error) {
 		fileName: file,
 	}
 	coin.ent.setPos(x, y)
+	coin.id = id
 
 	return coin, nil
 }

@@ -12,7 +12,7 @@ import (
 	debug "pacman-redes/lib/debug"
 )
 
-func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
+func VerifyFileViability(id byte, tam uint, fileType PacketT) (*os.File, error) {
 	var fileExt string
 	switch fileType {
 	case TxtFile:
@@ -60,10 +60,10 @@ func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
 	return tmpFile, nil
 }
 
-func ParseFileHeader(content []byte) (id int, tam uint, err error) {
+func ParseFileHeader(content []byte) (id byte, tam uint, err error) {
 	debug.PrintLog("cabecalho arquivo recebido: %s\n", string(content))
 
-	_, err = fmt.Sscanf(string(content), "%c%d", &id, &tam)
+	_, err = fmt.Sscanf(string(content), "%c-%d", &id, &tam)
 	if err != nil {
 		return 0, 0, fmt.Errorf("formato de cabecalho de arquivo invalido: %w", err)
 	}
@@ -128,7 +128,7 @@ func ReceiveFile(file *os.File, tam uint) (string, error) {
 	return fileName, nil
 }
 
-func SendFile(id int, file *os.File) error {
+func SendFile(id byte, file *os.File) error {
 	fileInfo, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("falha ao obter informacoes do arquivo: %w", err)
@@ -156,7 +156,8 @@ func SendFile(id int, file *os.File) error {
 	}
 
 	// enviar pacote cabecalho
-	msg := CreateMessage([]byte(fmt.Sprintf("%c%d", id&0xff, fileInfo.Size())), fileType)
+	fmt.Printf("arquivo enviar: %s\n", fmt.Sprintf("%c%d", id, fileInfo.Size()))
+	msg := CreateMessage([]byte(fmt.Sprintf("%c-%d", id, fileInfo.Size())), fileType)
 	err = SendMessage(msg)
 	if err != nil {
 		return fmt.Errorf("falha ao enviar cabecalho do arquivo: %w", err)

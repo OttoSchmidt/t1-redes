@@ -2,8 +2,8 @@ package pacman
 
 import (
 	"fmt"
-	"os"
 	"math/rand/v2"
+	"os"
 	"slices"
 
 	rawsockets "pacman-redes/lib/rawSockets"
@@ -159,7 +159,7 @@ func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 				panic(err)
 			}
 			defer file.Close()
-			err = rawsockets.SendFile(7, file)
+			err = rawsockets.SendFile('7', file)
 			if err != nil {
 				rawsockets.ServerState.WriteLog(fmt.Sprintf("[ERRO] %s\n", err.Error()))
 				break
@@ -178,7 +178,7 @@ func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 				panic(err)
 			}
 			defer file.Close()
-			err = rawsockets.SendFile(int(c.ent.symbol), file)
+			err = rawsockets.SendFile(c.id, file)
 			if err != nil {
 				rawsockets.ServerState.WriteLog(fmt.Sprintf("[ERRO] %s\n", err.Error()))
 				break
