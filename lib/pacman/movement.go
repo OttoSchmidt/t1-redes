@@ -1,7 +1,10 @@
 package pacman
 
 import (
+	"fmt"
+	"os"
 	rawsockets "pacman-redes/lib/rawSockets"
+	"slices"
 )
 
 
@@ -14,8 +17,7 @@ func (g *Ghost) movement() {
 	switch g.ent.symbol {
 		case 
 	}
-}
-*/
+}*/
 
 func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 	// mover player
@@ -48,7 +50,46 @@ func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 	// mover fantasmas
 
 
-	// detectar colisao
+	// detectar colisao com fantasmas
+	for _, g := range gs.GameMap.ghosts {
+		if gs.GameMap.pacman.ent.pos.detectCollision(&g.ent.pos) {
+			// enviar arquivo
+			file, err := os.OpenFile("./files/jumpscare.jpg", os.O_RDONLY, 0)
+			if err != nil {
+				panic(err)
+			}
+			defer file.Close()
+			err = rawsockets.SendFile(7, file)
+			if err != nil {
+				rawsockets.ServerState.WriteLog(fmt.Sprintf("[ERRO] %s\n", err.Error()))
+				break
+			}
+
+			break
+		}
+	}
+
+	// detectar colisao com moedas
+	for i, c := range gs.GameMap.coins {
+		if gs.GameMap.pacman.ent.pos.detectCollision(&c.ent.pos) {
+			// enviar arquivo da moeda
+			file, err := os.OpenFile(c.fileName, os.O_RDONLY, 0)
+			if err != nil {
+				panic(err)
+			}
+			defer file.Close()
+			err = rawsockets.SendFile(int(c.ent.symbol), file)
+			if err != nil {
+				rawsockets.ServerState.WriteLog(fmt.Sprintf("[ERRO] %s\n", err.Error()))
+				break
+			}
+
+			// remover moeda
+			gs.GameMap.coins = slices.Delete(gs.GameMap.coins, i, i+1)
+
+			break
+		}
+	}
 	
 
 	return nil
