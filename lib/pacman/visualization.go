@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -187,6 +188,48 @@ func GridFromBytes(stream []byte) (Grid, Position, uint8) {
 	return grid, center, stream[3]
 }
 
+func (s *GameState) generateRandomPosition() Position {
+	var randPos Position
+
+	for {
+		randPos.x = uint8(rand.IntN(40))
+		randPos.y = uint8(rand.IntN(40))
+
+		if s.GameMap.grid[randPos.y][randPos.x] == 'X' {
+			continue
+		}
+
+		if randPos.detectCollision(&s.GameMap.pacman.ent.pos) {
+			continue
+		}
+
+		colisionWithEntity := false
+		for _, g := range s.GameMap.ghosts {
+			if randPos.detectCollision(&g.ent.pos) {
+				colisionWithEntity = true
+				break
+			}
+		} 
+
+		if colisionWithEntity {
+			continue
+		}
+
+		for _, c := range s.GameMap.coins {
+			if randPos.detectCollision(&c.ent.pos) {
+				colisionWithEntity = true
+				break
+			}
+		}
+
+		if !colisionWithEntity {
+			break
+		}
+	}
+
+	return randPos
+}
+
 // ler mapa e entidades de um csv
 func (s *GameState) ReadMapCsv(csv string) error {
 	file, err := os.ReadFile(csv)
@@ -197,7 +240,11 @@ func (s *GameState) ReadMapCsv(csv string) error {
 	s.GameMap.grid = make(Grid, 40)
 	s.GameMap.ghosts = make([]Ghost, 0)
 	s.GameMap.coins = make([]Coin, 0)
-	s.GameMap.windowSize = 1
+	s.GameMap.windowSize = 40
+
+	remainingGhosts := []byte{'R', 'G', 'B', 'Y'}
+	remainingCoins := []byte{'1', '2', '3', '4', '5', '6'}
+	pacmanCreated := false
 
 	lines := strings.Split(string(file), "\n")
 	for i := 0; i < 40; i++ {
@@ -209,34 +256,73 @@ func (s *GameState) ReadMapCsv(csv string) error {
 
 		for j, c := range cells {
 			switch c {
-			case "X", "x":
+			case "X":
 				s.GameMap.grid[i][j] = 'X'
 			case "0":
 				s.GameMap.grid[i][j] = ' '
-			case "P", "p":
+			case "P":
 				p, err := createPacman(j, i)
 				if err != nil {
 					return err
 				}
 				s.GameMap.pacman = p
-			case "R", "r", "B", "b", "Y", "y", "G", "g":
+				pacmanCreated = true
+			case "R", "B", "Y", "G":
 				newGhost, err := createGhost(j, i, byte(c[0]))
 				if err != nil {
 					return err
 				}
 				s.GameMap.ghosts = append(s.GameMap.ghosts, newGhost)
+				if slices.Contains(remainingGhosts, byte(c[0])) {
+					idx := slices.Index(remainingGhosts, byte(c[0]))
+					remainingGhosts = slices.Delete(remainingGhosts, idx, idx+1)
+				}
 			case "1", "2", "3", "4", "5", "6":
 				newCoin, err := createCoin(j, i, byte(c[0]))
 				if err != nil {
 					return err
 				}
 				s.GameMap.coins = append(s.GameMap.coins, newCoin)
+				if slices.Contains(remainingCoins, byte(c[0])) {
+					idx := slices.Index(remainingCoins, byte(c[0]))
+					remainingCoins = slices.Delete(remainingCoins, idx, idx+1)
+				}
 			case "":
 				continue
 			default:
 				return fmt.Errorf("simbolo em .csv nao reconhecido: %s (%d)\n", c, c[0])
 			}			
 		}
+	}
+
+	// gerar pacman
+	if !pacmanCreated {
+		pos := s.generateRandomPosition()
+		p, err := createPacman(int(pos.x), int(pos.y))
+		if err != nil {
+			return err
+		}
+		s.GameMap.pacman = p
+	}
+
+	// gerar fantasmas aleatorios
+	for _, g := range remainingGhosts {
+		pos := s.generateRandomPosition()
+		newGhost, err := createGhost(int(pos.x), int(pos.y), g)
+		if err != nil {
+			return err
+		}
+		s.GameMap.ghosts = append(s.GameMap.ghosts, newGhost)
+	}
+
+	// gerar moedas
+	for _, c := range remainingCoins {
+		pos := s.generateRandomPosition()
+		newCoin, err := createCoin(int(pos.x), int(pos.y), c)
+		if err != nil {
+			return err
+		}
+		s.GameMap.coins = append(s.GameMap.coins, newCoin)
 	}
 
 	return nil
