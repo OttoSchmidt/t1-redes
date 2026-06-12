@@ -12,22 +12,22 @@ const NC = "\033[0m"
 type Grid [][]byte
 
 type Map struct {
-	grid Grid
+	grid       Grid
 	windowSize uint8
 
 	pacman Pacman
 	ghosts []Ghost
-	coins []Coin
+	coins  []Coin
 }
 
 type GameState struct {
 	GameMap Map
-	round int
+	round   int
 }
 
 func (gs *GameState) IncrementRound() {
 	gs.round++
-	if gs.round % 5 == 0 && gs.GameMap.windowSize < 255 {
+	if gs.round%5 == 0 && gs.GameMap.windowSize < 255 {
 		gs.GameMap.windowSize++
 	}
 }
@@ -37,8 +37,8 @@ type Position struct {
 }
 
 type Entity struct {
-	pos Position
-	symbol byte	
+	pos    Position
+	symbol byte
 }
 
 func (e *Entity) setPos(x, y int) {
@@ -62,11 +62,13 @@ func createPacman(x, y int) (Pacman, error) {
 }
 
 type Ghost struct {
-	ent Entity
+	ent       Entity
+	dir       Direction
+	turnRight bool
 }
 
 func createGhost(x, y int, s byte) (Ghost, error) {
-	g := Ghost {
+	g := Ghost{
 		ent: Entity{
 			symbol: s,
 		},
@@ -77,8 +79,8 @@ func createGhost(x, y int, s byte) (Ghost, error) {
 }
 
 type Coin struct {
-	ent Entity
-	fileName string		
+	ent      Entity
+	fileName string
 }
 
 func createCoin(x, y int, id byte) (Coin, error) {
@@ -95,7 +97,7 @@ func createCoin(x, y int, id byte) (Coin, error) {
 	}
 
 	file := fmt.Sprintf("./files/%s.%s", string(id), ext)
-	coin := Coin {
+	coin := Coin{
 		ent: Entity{
 			symbol: 'C',
 		},
@@ -104,4 +106,4 @@ func createCoin(x, y int, id byte) (Coin, error) {
 	coin.ent.setPos(x, y)
 
 	return coin, nil
-} 
+}
