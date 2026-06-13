@@ -113,6 +113,7 @@ func ReceivePacketTWithTimeout(timeoutMillis int, expectedType PacketT) (Message
 
 func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 	messageCompleted := false
+	fileReceived := false
 	firstPktTypeReceived := Ack
 	content := make([]byte, 0)
 
@@ -204,9 +205,14 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 				ServerState.WriteLog(fmt.Sprintf("\t- erro ao abrir arquivo com handler padrao: %v\n", err))
 			}
 
-			messageCompleted = true
+			fileReceived = true
 		case End, EndConn:
-			messageCompleted = true
+			if !fileReceived {
+				messageCompleted = true
+			} else {
+				fileReceived = false // receber nova visualizacao
+				firstPktTypeReceived = Ack
+			}
 		case MoveUp, MoveLeft, MoveRight, MoveDown:
 			continue
 		default:

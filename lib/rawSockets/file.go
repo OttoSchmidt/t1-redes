@@ -96,6 +96,12 @@ func ReceiveFile(file *os.File, tam uint) (string, error) {
 			continue
 		}
 
+		// escrever os bytes recebidos no buffer de arquivo
+		copy(fileBuffer[receivedBytes:], msg.Content)
+		receivedBytes += uint(len(msg.Content))
+
+		ServerState.WriteLog(fmt.Sprintf("\t- [ARQ] %d%% recebido (%d de %d bytes)\n", 100*receivedBytes/tam, receivedBytes, tam))
+
 		ackMsg := CreateMessage(nil, Ack)
 		if sendErr := SendMessage(ackMsg); sendErr != nil {
 			debug.PrintLog("Erro ao enviar ACK para pacote recebido: %v\n", sendErr)
@@ -106,11 +112,6 @@ func ReceiveFile(file *os.File, tam uint) (string, error) {
 			os.Remove(file.Name())
 			return "", ErrUnexpectedPacketType
 		}
-
-		// escrever os bytes recebidos no buffer de arquivo
-		copy(fileBuffer[receivedBytes:], msg.Content)
-		receivedBytes += uint(len(msg.Content))
-		debug.PrintLog("ARQ: falta %d de %d bytes\n", tam - receivedBytes, tam)
 	}
 
 	// escrever o buffer de arquivo no arquivo temporario
@@ -156,7 +157,6 @@ func SendFile(id byte, file *os.File) error {
 	}
 
 	// enviar pacote cabecalho
-	fmt.Printf("arquivo enviar: %s\n", fmt.Sprintf("%c-%d", id, fileInfo.Size()))
 	msg := CreateMessage([]byte(fmt.Sprintf("%c-%d", id, fileInfo.Size())), fileType)
 	err = SendMessage(msg)
 	if err != nil {

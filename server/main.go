@@ -83,13 +83,4 @@ func main() {
 	}
 
 	fmt.Println("Servidor finalizado")
-
-	/*
-	file, err := os.OpenFile("files/drone.mp4", os.O_RDONLY, 0)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-	err = rawsockets.SendFile(1, file)
-	*/
 }

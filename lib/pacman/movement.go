@@ -119,6 +119,26 @@ func (gs *GameState) moveGhosts() {
 	}
 }
 
+func (gs *GameState) detectGhostColision() {
+	for _, g := range gs.GameMap.ghosts {
+		if gs.GameMap.pacman.ent.pos.detectCollision(&g.ent.pos) {
+			// enviar arquivo
+			file, err := os.OpenFile("./files/jumpscare.jpg", os.O_RDONLY, 0)
+			if err != nil {
+				panic(err)
+			}
+			defer file.Close()
+			err = rawsockets.SendFile('7', file)
+			if err != nil {
+				rawsockets.ServerState.WriteLog(fmt.Sprintf("[ERRO] %s\n", err.Error()))
+				break
+			}
+
+			break
+		}
+	}
+}
+
 func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 	// mover player
 	newPlayerPos := gs.GameMap.pacman.ent.pos
@@ -147,27 +167,14 @@ func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 		gs.GameMap.pacman.ent.pos.y = newPlayerPos.y
 	}
 
+	// detectar colisao com fantasmas (antes de move-los)
+	gs.detectGhostColision()
+
 	// mover fantasmas
 	gs.moveGhosts()
 
-	// detectar colisao com fantasmas
-	for _, g := range gs.GameMap.ghosts {
-		if gs.GameMap.pacman.ent.pos.detectCollision(&g.ent.pos) {
-			// enviar arquivo
-			file, err := os.OpenFile("./files/jumpscare.jpg", os.O_RDONLY, 0)
-			if err != nil {
-				panic(err)
-			}
-			defer file.Close()
-			err = rawsockets.SendFile('7', file)
-			if err != nil {
-				rawsockets.ServerState.WriteLog(fmt.Sprintf("[ERRO] %s\n", err.Error()))
-				break
-			}
-
-			break
-		}
-	}
+	// detectar colisao com fantasmas (depois de move-los)
+	gs.detectGhostColision()
 
 	// detectar colisao com moedas
 	for i, c := range gs.GameMap.coins {
@@ -191,6 +198,5 @@ func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 		}
 	}
 	
-
 	return nil
 }
