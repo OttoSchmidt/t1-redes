@@ -182,7 +182,8 @@ func GridFromBytes(stream []byte) (Grid, Position, uint8) {
 	grid := make(Grid, numLines)
 	for i := range grid {
 		grid[i] = make([]byte, numColumns)
-		copy(grid[i], map1D[i*numColumns:(i+1)*numColumns+1])
+		copy(grid[i], map1D[:numColumns])
+		map1D = map1D[numColumns:]
 	}
 
 	return grid, center, stream[3]
@@ -240,7 +241,7 @@ func (s *GameState) ReadMapCsv(csv string) error {
 	s.GameMap.grid = make(Grid, 40)
 	s.GameMap.ghosts = make([]Ghost, 0)
 	s.GameMap.coins = make([]Coin, 0)
-	s.GameMap.windowSize = 40
+	s.GameMap.windowSize = 1
 
 	remainingGhosts := []byte{'R', 'G', 'B', 'Y'}
 	remainingCoins := []byte{'1', '2', '3', '4', '5', '6'}
