@@ -122,18 +122,13 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 	firstPktTypeReceived := Ack
 	content := make([]byte, 0)
 
-	lastPktTime := time.Now()
 	for !messageCompleted {
 		msg, err := ReceivePacket(buf)
 
 		if err != nil {
 			if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EINTR) {
-				if time.Since(lastPktTime) > 20*time.Second {
-					return nil, firstPktTypeReceived, ErrTimeout
-				}
 				continue
 			}
-			lastPktTime = time.Now()
 
 			if errors.Is(err, ErrDuplicatePacket) {
 				// pacote duplicado. se o ultimo pacote enviado foi ACK, enviar novamente e ignorar mensagem atual
@@ -154,8 +149,6 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 			} else {
 				return nil, firstPktTypeReceived, err
 			}
-		} else {
-			lastPktTime = time.Now()
 		}
 
 		if firstPktTypeReceived == Ack && msg.PacketType != PacketT(0) {

@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -83,18 +82,12 @@ func ReceiveFile(file *os.File, tam uint) (string, error) {
 	fileBuffer := make([]byte, tam)
 	buf := make([]byte, 40)
 
-	lastPktTime := time.Now()
 	for receivedBytes < tam {
 		msg, err := ReceivePacket(buf)
 		if err != nil {
 			if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EINTR) {
-				if time.Since(lastPktTime) > 20*time.Second {
-					os.Remove(file.Name())
-					return "", ErrTimeout
-				}
 				continue
 			}
-			lastPktTime = time.Now()
 
 			switch {
 			case errors.Is(err, ErrDuplicatePacket):
@@ -119,9 +112,7 @@ func ReceiveFile(file *os.File, tam uint) (string, error) {
 				}
 				continue
 			}
-		} else {
-			lastPktTime = time.Now()
-		}
+		}	
 
 		// escrever os bytes recebidos no buffer de arquivo
 		copy(fileBuffer[receivedBytes:], msg.Content)
