@@ -268,7 +268,7 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 
 	// validar numero de sequência
 	if msg.Sequence != ServerState.SequenceNumber {
-		return Message{}, fmt.Errorf("sequencia inesperada. recebido: %d | esperado: %d\n", msg.Sequence, ServerState.SequenceNumber)
+		return Message{}, fmt.Errorf("%w. recebido: %d | esperado: %d\n", ErrUnexpectedSequence, msg.Sequence, ServerState.SequenceNumber)
 	}
 
 	// tudo certo, registrar sequência recebida e incrementar para a próxima mensagem

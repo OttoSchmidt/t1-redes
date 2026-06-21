@@ -15,6 +15,10 @@ Recebe um pacote do socket, aguardando indefinidamente
 func ReceivePacket(buf []byte) (Message, error) {
 	n, addr, err := syscall.Recvfrom(ServerState.Sock, buf, 0)
 	if err != nil {
+		if errors.Is(err, syscall.ENETDOWN) || errors.Is(err, syscall.ENETRESET) {
+			time.Sleep(100 * time.Millisecond)
+			return Message{}, syscall.EAGAIN
+		}
 		return Message{}, err
 	}
 
@@ -70,7 +74,7 @@ func ReceivePacketWithTimeout(timeoutMillis int) (Message, error) {
 			switch {
 			case errors.Is(err, ErrIgnoredPacket),
 				errors.Is(err, ErrInvalidStartMarker),
-				errors.Is(err, ErrDuplicatePacket),
+				errors.Is(err, ErrUnexpectedSequence),
 				errors.Is(err, syscall.EAGAIN),
 				errors.Is(err, syscall.EWOULDBLOCK),
 				errors.Is(err, syscall.EINTR):
@@ -90,25 +94,26 @@ Recebe um pacote do socket, aguardando um tempo máximo especificado (timeout) e
 func ReceivePacketTWithTimeout(timeoutMillis int, expectedType PacketT) (Message, error) {
 	deadline := time.Now().Add(time.Duration(timeoutMillis) * time.Millisecond)
 
-	remaining := time.Until(deadline)
-	if remaining <= 0 {
-		return Message{}, ErrTimeout
-	}
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return Message{}, ErrTimeout
+		}
 
-	msg, err := ReceivePacketWithTimeout(int(remaining/time.Millisecond))
-	switch {
-	case errors.Is(err, ErrTimeout):
-		return Message{}, ErrTimeout
-	case err != nil:
-		return Message{}, err
-	}
+		msg, err := ReceivePacketWithTimeout(int(remaining/time.Millisecond))
+		if err != nil {
+			if errors.Is(err, ErrDuplicatePacket) || errors.Is(err, ErrUnexpectedSequence) {
+				continue
+			}
+			return Message{}, err
+		}
 
-	if msg.PacketType != expectedType {
-		return msg, ErrUnexpectedPacketType
-	}
+		if msg.PacketType != expectedType {
+			return msg, ErrUnexpectedPacketType
+		}
 
-	return msg, nil
-	
+		return msg, nil
+	}
 }
 
 func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
@@ -117,14 +122,19 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 	firstPktTypeReceived := Ack
 	content := make([]byte, 0)
 
+	lastPktTime := time.Now()
 	for !messageCompleted {
 		msg, err := ReceivePacket(buf)
 
-		if firstPktTypeReceived == Ack && msg.PacketType != PacketT(0) {
-			firstPktTypeReceived = msg.PacketType
-		}
-
 		if err != nil {
+			if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EINTR) {
+				if time.Since(lastPktTime) > 20*time.Second {
+					return nil, firstPktTypeReceived, ErrTimeout
+				}
+				continue
+			}
+			lastPktTime = time.Now()
+
 			if errors.Is(err, ErrDuplicatePacket) {
 				// pacote duplicado. se o ultimo pacote enviado foi ACK, enviar novamente e ignorar mensagem atual
 				if ServerState.lastSentMessage.PacketType == Ack {
@@ -139,14 +149,19 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 					return nil, firstPktTypeReceived, fmt.Errorf("erro ao enviar nack: %v\n", resendErr)
 				}
 				continue
-			} else if errors.Is(err, ErrIgnoredPacket) || errors.Is(err, ErrInvalidStartMarker) || 
-				errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EINTR) {
+			} else if errors.Is(err, ErrIgnoredPacket) || errors.Is(err, ErrInvalidStartMarker) || errors.Is(err, ErrUnexpectedSequence) {
 				continue
 			} else {
 				return nil, firstPktTypeReceived, err
 			}
+		} else {
+			lastPktTime = time.Now()
 		}
 
+		if firstPktTypeReceived == Ack && msg.PacketType != PacketT(0) {
+			firstPktTypeReceived = msg.PacketType
+		}		
+		
 		// enviar ack
 		if msg.PacketType != Ack && msg.PacketType != Nack && 
 			msg.PacketType != JpgFile && msg.PacketType != Mp4File &&
