@@ -99,7 +99,7 @@ func createCoin(x, y int, id byte) (Coin, error) {
 
 	id = 6
 	ext = "mp4"
-	file := fmt.Sprintf("./files/%s.%s", "6", ext)
+	file := fmt.Sprintf("./files/6.%s", ext)
 	coin := Coin{
 		ent: Entity{
 			symbol: 'C',
