@@ -15,11 +15,12 @@
 
   services.xserver = {
     enable = true;
-    displayManager.gdm.enable = true;
-    desktopManager.gnome.enable = true;
-    layout = "br";
-    xkbVariant = "nodeadkeys"; # Sem teclas mortas
+    xkb.layout = "br";
+    xkb.variant = "nodeadkeys"; # Sem teclas mortas
   };
+
+  services.desktopManager.gnome.enable = true;
+  services.displayManager.gdm.enable = true;
 
   # remover console padrao, pois teremos o ptyxis
   environment.gnome.excludePackages = with pkgs; [
@@ -88,10 +89,15 @@
     ptyxis
     tcpdump
     vim
+    mpv
     vscode
     sshfs
     wireshark
   ];
+
+  xdg.mime.defaultApplications = {
+    "video/mp4" = "mpv.desktop";
+  };
 
   system.stateVersion = "25.11";
 }

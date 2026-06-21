@@ -73,7 +73,9 @@ func ParseFileHeader(content []byte) (id byte, tam uint, err error) {
 }
 
 func OpenDefaultFileHandler(file string) error {
+	uid := os.Getenv("SUDO_UID")
 	cmd := exec.Command("xdg-open", file)
+	cmd.Env = append(os.Environ(), "XDG_RUNTIME_DIR=/run/user/"+uid)
 	return cmd.Start()
 }
 
