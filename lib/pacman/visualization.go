@@ -48,6 +48,7 @@ func getMapWindow(g Grid, pacman Pacman, windowSize uint8) Grid {
 func (g *Grid) ToString(center Position, radius uint8) string {
 	var gridComplete strings.Builder
 
+	gridComplete.WriteString(BACKGROUND+WALL)
 	for i := 0; i < 84; i++ { // topo do frame
 		gridComplete.WriteString("█")
 	}
@@ -56,37 +57,36 @@ func (g *Grid) ToString(center Position, radius uint8) string {
 	for i := int(center.y) - int(radius); i > 0; i-- { // vazio superior
 		gridComplete.WriteString(fmt.Sprintf("██%s", BLACK)) // lado esquerdo frame
 		for i := 0; i < 80; i++ { // fundo do mapa
-			gridComplete.WriteString("█")
+			gridComplete.WriteString(" ")
 		}
-		gridComplete.WriteString(fmt.Sprintf("%s██\n", NC)) // lado direito frame
+		gridComplete.WriteString(fmt.Sprintf("%s██\n", WALL)) // lado direito frame
 	}
 
 	for _, line := range *g { // centro
 		gridComplete.WriteString(fmt.Sprintf("██%s", BLACK)) // frame esquerdo
 		for i := int(center.x) - int(radius); i > 0; i-- { // vazio esquerdo
-			gridComplete.WriteString("██")
+			gridComplete.WriteString("  ")
 		}
-		gridComplete.WriteString(NC)
 
 		for _, c := range line { // conteudo mapa
 			var element string
 			switch c {
 			case ' ':
-				element = fmt.Sprintf("%s██%s", BLACK, NC)
+				element = fmt.Sprintf("%s  ", BLACK)
 			case 'X':
-				element = "██"
+				element = fmt.Sprintf("%s██", WALL)
 			case 'P':
-				element = fmt.Sprintf("%s P%s", YELLOW, NC)
+				element = fmt.Sprintf("%s𜱭 ", YELLOW)
 			case 'C':
-				element = fmt.Sprintf("%s C%s", YELLOW, NC)
+				element = fmt.Sprintf("%s🪙", YELLOW)
 			case 'Y':
-				element = fmt.Sprintf("%s Y%s", YELLOW, NC)
+				element = fmt.Sprintf("%sᗣ ", YELLOW)
 			case 'R':
-				element = fmt.Sprintf("%s R%s", RED, NC)
+				element = fmt.Sprintf("%sᗣ ", RED)
 			case 'G':
-				element = fmt.Sprintf("%s G%s", GREEN, NC)
+				element = fmt.Sprintf("%sᗣ ", GREEN)
 			case 'B':
-				element = fmt.Sprintf("%s B%s", BLUE, NC)
+				element = fmt.Sprintf("%sᗣ ", BLUE)
 			}
 
 			gridComplete.WriteString(element)
@@ -96,21 +96,21 @@ func (g *Grid) ToString(center Position, radius uint8) string {
 		for i := int(center.x) + int(radius) + 1; i < 40; i++ { // vazio direito
 			gridComplete.WriteString("██")
 		}
-		gridComplete.WriteString(fmt.Sprintf("%s██\n", NC)) // frame direito
+		gridComplete.WriteString(fmt.Sprintf("%s██\n", WALL)) // frame direito
 	}
 
 	for i := int(center.y) + int(radius) + 1; i < 40; i++ { // vazio inferior
 		gridComplete.WriteString(fmt.Sprintf("██%s", BLACK)) // lado esquerdo frame
 		for i := 0; i < 80; i++ { // fundo mapa
-			gridComplete.WriteString("█")
+			gridComplete.WriteString(" ")
 		}
-		gridComplete.WriteString(fmt.Sprintf("%s██\n", NC)) // lado direito frame
+		gridComplete.WriteString(fmt.Sprintf("%s██\n", WALL)) // lado direito frame
 	}
 
 	for i := 0; i < 84; i++ { // baixo frame
 		gridComplete.WriteString("█")
 	}
-	gridComplete.WriteString("\n")
+	gridComplete.WriteString(fmt.Sprintf("%s\n", NC))
 
 	return gridComplete.String()
 }

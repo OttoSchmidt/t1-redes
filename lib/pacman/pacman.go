@@ -2,11 +2,13 @@ package pacman
 
 import "fmt"
 
+const BACKGROUND = "\033[48;5;16m"
+const WALL = "\033[38;5;17m"
 const RED = "\033[31m"
 const GREEN = "\033[32m"
 const YELLOW = "\033[33m"
 const BLUE = "\033[34m"
-const BLACK = "\033[30m"
+const BLACK = "\033[38;5;16m"
 const NC = "\033[0m"
 
 type Grid [][]byte
