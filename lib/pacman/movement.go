@@ -123,7 +123,7 @@ func (gs *GameState) detectGhostColision() {
 	for _, g := range gs.GameMap.ghosts {
 		if gs.GameMap.pacman.ent.pos.detectCollision(&g.ent.pos) {
 			// enviar arquivo
-			file, err := os.OpenFile("./files/jumpscare.jpg", os.O_RDONLY, 0)
+			file, err := os.OpenFile("./files/jumpscare.mp4", os.O_RDONLY, 0)
 			if err != nil {
 				panic(err)
 			}
