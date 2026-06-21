@@ -19,19 +19,6 @@ func Abs[T Signed](x T) T {
 	return x
 }
 
-// inserir entidade numa posicao aleatoria no mapa
-func randomPosition(ent Entity, m Map) {
-	for {
-		line := rand.IntN(40)
-		column := rand.IntN(40)
-
-		if m.grid[line][column] != 'X' {
-			ent.setPos(line, column)
-			break
-		}
-	}
-}
-
 // inserir entidades num grid seguindo a ordem: pastilhas -> fantasmas -> pacman
 func (m *Grid) insertEntities(pacman Pacman, ghosts []Ghost, coins []Coin) {
 	for _, e := range coins {
@@ -159,7 +146,13 @@ func (m *Map) ToBytes() []byte {
 	// converter matriz para vetor
 	var map1D []byte
 	map1D = append(map1D, uint8(len(windowedMap)), uint8(m.pacman.ent.pos.x), uint8(m.pacman.ent.pos.y), uint8(m.windowSize))
-	for _, l := range windowedMap {
+	for i, l := range windowedMap {
+		// substituir '-' por ' '
+		for j, value := range l {
+			if value == '-' {
+				windowedMap[i][j] = ' '
+			}
+		}
 		map1D = append(map1D, l...)
 	}
 
@@ -196,7 +189,8 @@ func (s *GameState) generateRandomPosition() Position {
 		randPos.x = uint8(rand.IntN(40))
 		randPos.y = uint8(rand.IntN(40))
 
-		if s.GameMap.grid[randPos.y][randPos.x] == 'X' {
+		if s.GameMap.grid[randPos.y][randPos.x] == 'X' ||
+			s.GameMap.grid[randPos.y][randPos.x] == '-' {
 			continue
 		}
 
@@ -261,6 +255,8 @@ func (s *GameState) ReadMapCsv(csv string) error {
 				s.GameMap.grid[i][j] = 'X'
 			case "0":
 				s.GameMap.grid[i][j] = ' '
+			case "-":
+				s.GameMap.grid[i][j] = '-'
 			case "P":
 				p, err := createPacman(j, i)
 				if err != nil {
