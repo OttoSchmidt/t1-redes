@@ -5,6 +5,8 @@ import (
 	"os"
 	"syscall"
 
+	debug "pacman-redes/lib/debug"
+	pacman "pacman-redes/lib/pacman"
 	rawsockets "pacman-redes/lib/rawSockets"
 )
 
@@ -12,46 +14,73 @@ func main() {
 	// interface padrao: loopback. para usar outra interface,
 	// passe o nome como argumento,como: eth0, enp3s0...
 	ifaceName := "lo"
+	csvMap := "./files/ufpr.csv"
 	if len(os.Args) > 1 {
 		ifaceName = os.Args[1]
-	}
 
-	sock, err := rawsockets.CreateSocket(ifaceName)
-	if err != nil {
-		panic(err)
-	}
-	defer syscall.Close(sock)
-
-	fmt.Println("Servidor iniciado")
-	for i := 0; i < 10; i++ {
-		content := "isso eh uma mensagem maior que 31 bytes. o esperado eh que ele divida em varias mensagens."
-		err := rawsockets.SendContent(sock, []byte(content), rawsockets.Data)
-		if err != nil {
-			panic(err)
+		if len(os.Args) > 2 {
+			csvMap = os.Args[2]
 		}
 	}
 
-	/*
-	file, err := os.OpenFile("files/teste.txt", os.O_RDONLY, 0)
+	// iniciar socket
+	err := rawsockets.CreateSocket(ifaceName)
 	if err != nil {
 		panic(err)
 	}
-	defer file.Close()
+	defer syscall.Close(rawsockets.ServerState.Sock)
 
-	err = rawsockets.SendFile(sock, 1, file)
+	// iniciar jogo
+	var gs pacman.GameState
+	err = gs.ReadMapCsv(csvMap)
+	if err != nil {
+		fmt.Printf("%s\n", err.Error())
+		return
+	}
+
+	fmt.Println("Servidor iniciado")
+
+	// enviar mapa
+	content := gs.GameMap.ToBytes()
+	err = rawsockets.SendContent(content, rawsockets.Init)
 	if err != nil {
 		panic(err)
 	}
-	*/
 
-	file, err := os.OpenFile("files/drone.mp4", os.O_RDONLY, 0)
-	if err != nil {
-		panic(err)
+	buf := make([]byte, 256)
+
+	// loop do jogo
+	gameRunning := true
+	for gameRunning {
+		// escutar por movimento
+		content, packetType, err := rawsockets.ReceiveContent(buf)
+		if err != nil {
+			fmt.Printf("erro ao receber pacote do cliente: %s\n", err.Error())
+			continue
+		}
+
+		debug.WriteDebug("conteudo recebido do cliente: %s\n", content)
+
+		gs.IncrementRound()
+
+		switch packetType {
+		case rawsockets.MoveUp, rawsockets.MoveDown, 
+			rawsockets.MoveLeft, rawsockets.MoveRight:
+				err = gs.MovePlayer(packetType)
+				if err != nil {
+					fmt.Printf("erro ao movimentar player: %s\n", err.Error())
+				}
+
+				// enviar novo mapa
+				content := gs.GameMap.ToBytes()
+				err = rawsockets.SendContent(content, rawsockets.Visualize)
+				if err != nil {
+					fmt.Printf("erro ao enviar novo mapa: %s\n", err.Error())
+				}
+		case rawsockets.EndConn:
+			gameRunning = false
+		}
 	}
-	defer file.Close()
-	err = rawsockets.SendFile(sock, 1, file)
-	
 
-	for {}
-
+	fmt.Println("Servidor finalizado")
 }

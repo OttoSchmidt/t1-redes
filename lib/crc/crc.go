@@ -44,11 +44,11 @@ var crcTable lookupTable
 const crcPolynomial = 0x07
 
 func init() {
-	debug.PrintLog("Gerando tabela de CRC-8 com polinômio 0x%02X.\n", crcPolynomial)
+	debug.WriteDebug("Gerando tabela de CRC-8 com polinômio 0x%02X.\n", crcPolynomial)
 
 	crcTable.generate()
 
-	debug.PrintLog("Tabela de CRC-8 gerada:\n")
+	debug.WriteDebug("Tabela de CRC-8 gerada:\n")
 	if debug.Debug {
 		crcTable.print()
 	}
@@ -57,7 +57,7 @@ func init() {
 // Calcula o CRC-8 para o buffer fornecido, o qual deve incluir somente 
 // os campos de tamanho, ID, tipo e dados
 func CalculateCRC(data []byte) byte {
-	debug.PrintLog("Calculando CRC para os dados: %x\n", data)
+	debug.WriteDebug("Calculando CRC para os dados: %x\n", data)
 	
 	crc := byte(0)
 	for _, b := range data {
@@ -65,7 +65,7 @@ func CalculateCRC(data []byte) byte {
 		crc = crcTable[value>>4][value&0x0F] // usar os 4 bits superiores e inferiores para indexar a tabela
 	}
 
-	debug.PrintLog("CRC calculado: %02X\n", crc)
+	debug.WriteDebug("CRC calculado: %02X\n", crc)
 
 	return crc
 }
@@ -73,7 +73,7 @@ func CalculateCRC(data []byte) byte {
 // Verifica se o CRC recebido é válido para os dados fornecidos. O buffer deve incluir
 // somente os campos de tamanho, ID, tipo e dados.
 func VerifyCRC(data []byte, receivedCRC byte) bool {
-	debug.PrintLog("CRC recebido: %02X\n", receivedCRC)
+	debug.WriteDebug("CRC recebido: %02X\n", receivedCRC)
 	calculatedCRC := CalculateCRC(data)
 
 	return receivedCRC == calculatedCRC

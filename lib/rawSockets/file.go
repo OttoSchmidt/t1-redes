@@ -6,21 +6,22 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
 	debug "pacman-redes/lib/debug"
 )
 
-func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
+func VerifyFileViability(id byte, tam uint, fileType PacketT) (*os.File, error) {
 	var fileExt string
 	switch fileType {
 	case TxtFile:
-		fileExt = ".txt"
+		fileExt = "txt"
 	case JpgFile:
-		fileExt = ".jpg"
+		fileExt = "jpg"
 	case Mp4File:
-		fileExt = ".mp4"
+		fileExt = "mp4"
 	default:
 		return nil, fmt.Errorf("tipo de arquivo invalido: %d", fileType)
 	}
@@ -41,13 +42,13 @@ func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
 	// blocos disponiveis * tamanho do bloco
 	tamAvailable := stat.Bavail * uint64(stat.Bsize)
 	if tamAvailable < uint64(tam) {
-		debug.PrintLog("Espaco disponivel: %d bytes; necessario: %d bytes\n", tamAvailable, tam)
+		debug.WriteLog("nao eh possivel receber arquivo\n\t- espaco disponivel: %d bytes;\n\t- necessario: %d bytes\n", tamAvailable, tam)
 		os.Remove(fileName)
 		return nil, ErrMissingStorage
 	}
 
 	// renomear arquivo
-	newFileName := fmt.Sprintf("/tmp/%d%s", id, fileExt)
+	newFileName := fmt.Sprintf("/tmp/%c.%s", id, fileExt)
 	tmpFile.Close()
 	os.Rename(fileName, newFileName)
 	tmpFile, err = os.OpenFile(newFileName, os.O_RDWR, 0666)
@@ -60,10 +61,10 @@ func VerifyFileViability(id int, tam uint, fileType PacketT) (*os.File, error) {
 	return tmpFile, nil
 }
 
-func ParseFileHeader(content []byte) (id int, tam uint, err error) {
-	debug.PrintLog("cabecalho arquivo recebido: %s\n", string(content))
+func ParseFileHeader(content []byte) (id byte, tam uint, err error) {
+	debug.WriteDebug("cabecalho arquivo recebido: %s\n", string(content))
 
-	_, err = fmt.Sscanf(string(content), "%c%d", &id, &tam)
+	_, err = fmt.Sscanf(string(content), "%c-%d", &id, &tam)
 	if err != nil {
 		return 0, 0, fmt.Errorf("formato de cabecalho de arquivo invalido: %w", err)
 	}
@@ -76,29 +77,52 @@ func OpenDefaultFileHandler(file string) error {
 	return cmd.Start()
 }
 
-func ReceiveFile(sock int, file *os.File, tam uint) (string, error) {
+func ReceiveFile(file *os.File, tam uint) (string, error) {
 	receivedBytes := uint(0)
 	fileBuffer := make([]byte, tam)
 	buf := make([]byte, 40)
 
 	for receivedBytes < tam {
-		msg, err := ReceivePacket(sock, buf)
+		msg, err := ReceivePacket(buf)
 		if err != nil {
-			debug.PrintLog("Erro ao receber pacote de arquivo: %v\n", err)
-
-			if errors.Is(err, ErrInvalidCRC) {
-				// enviar NACK para solicitar retransmissão
-				nackMsg := CreateMessage(nil, Nack)
-				if sendErr := SendMessage(sock, nackMsg); sendErr != nil {
-					debug.PrintLog("Erro ao enviar NACK para pacote com CRC invalido: %v\n", sendErr)
-				}
+			if errors.Is(err, syscall.EAGAIN) || errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EINTR) {
+				continue
 			}
-			continue
-		}
+
+			switch {
+			case errors.Is(err, ErrDuplicatePacket):
+				// pacote duplicado. se o ultimo pacote enviado foi ACK, enviar novamente e ignorar mensagem atual
+				if ServerState.lastSentMessage.PacketType == Ack {
+					ResendLastSent()
+				}
+				continue
+			case errors.Is(err, ErrIgnoredPacket),
+				errors.Is(err, ErrInvalidStartMarker),
+				errors.Is(err, ErrUnexpectedSequence):
+				continue
+			default:
+				debug.WriteLog("Erro ao receber pacote de arquivo: %v\n", err)
+
+				if errors.Is(err, ErrInvalidCRC) {
+					// enviar NACK para solicitar retransmissão
+					nackMsg := CreateMessage(nil, Nack)
+					if sendErr := SendMessage(nackMsg); sendErr != nil {
+						debug.WriteLog("Erro ao enviar NACK para pacote com CRC invalido: %v\n", sendErr)
+					}
+				}
+				continue
+			}
+		}	
+
+		// escrever os bytes recebidos no buffer de arquivo
+		copy(fileBuffer[receivedBytes:], msg.Content)
+		receivedBytes += uint(len(msg.Content))
+
+		debug.WriteLog("\t- [ARQ] %d%% recebido (%d de %d bytes)\n", 100*receivedBytes/tam, receivedBytes, tam)
 
 		ackMsg := CreateMessage(nil, Ack)
-		if sendErr := SendMessage(sock, ackMsg); sendErr != nil {
-			debug.PrintLog("Erro ao enviar ACK para pacote recebido: %v\n", sendErr)
+		if sendErr := SendMessage(ackMsg); sendErr != nil {
+			debug.WriteLog("Erro ao enviar ACK para pacote recebido: %v\n", sendErr)
 			continue
 		}
 
@@ -106,11 +130,6 @@ func ReceiveFile(sock int, file *os.File, tam uint) (string, error) {
 			os.Remove(file.Name())
 			return "", ErrUnexpectedPacketType
 		}
-
-		// escrever os bytes recebidos no buffer de arquivo
-		copy(fileBuffer[receivedBytes:], msg.Content)
-		receivedBytes += uint(len(msg.Content))
-		debug.PrintLog("ARQ: falta %d de %d bytes\n", tam - receivedBytes, tam)
 	}
 
 	// escrever o buffer de arquivo no arquivo temporario
@@ -128,7 +147,7 @@ func ReceiveFile(sock int, file *os.File, tam uint) (string, error) {
 	return fileName, nil
 }
 
-func SendFile(sock int, id int, file *os.File) error {
+func SendFile(id byte, file *os.File) error {
 	fileInfo, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("falha ao obter informacoes do arquivo: %w", err)
@@ -156,12 +175,12 @@ func SendFile(sock int, id int, file *os.File) error {
 	}
 
 	// enviar pacote cabecalho
-	msg := CreateMessage([]byte(fmt.Sprintf("%c%d", id&0xff, fileInfo.Size())), fileType)
-	err = SendMessage(sock, msg)
+	msg := CreateMessage([]byte(fmt.Sprintf("%c-%d", id, fileInfo.Size())), fileType)
+	err = SendMessage(msg)
 	if err != nil {
 		return fmt.Errorf("falha ao enviar cabecalho do arquivo: %w", err)
 	}
 
 	// enviar o conteudo do arquivo
-	return SendContent(sock, content, Data)
+	return SendContent(content, Data)
 }
