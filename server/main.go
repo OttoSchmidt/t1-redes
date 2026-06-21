@@ -5,7 +5,7 @@ import (
 	"os"
 	"syscall"
 
-	"pacman-redes/lib/debug"
+	debug "pacman-redes/lib/debug"
 	pacman "pacman-redes/lib/pacman"
 	rawsockets "pacman-redes/lib/rawSockets"
 )
@@ -59,7 +59,7 @@ func main() {
 			continue
 		}
 
-		debug.PrintLog("conteudo recebido do cliente: %s\n", content)
+		debug.WriteDebug("conteudo recebido do cliente: %s\n", content)
 
 		gs.IncrementRound()
 

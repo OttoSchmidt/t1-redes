@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	debug "pacman-redes/lib/debug"
 	pacman "pacman-redes/lib/pacman"
 	rawsockets "pacman-redes/lib/rawSockets"
 )
@@ -54,7 +55,7 @@ func getNewMap(oldModel model) model {
 
 	content, packetType, err := rawsockets.ReceiveContent(buf)
 	if err != nil {
-		rawsockets.ServerState.WriteLog(fmt.Sprintf("\t- erro ao receber conteudo:\n\t- %v\n", err))
+		debug.WriteDebug("\t- erro ao receber conteudo:\n\t- %v\n", err)
 	}
 
 	if packetType == rawsockets.Init || packetType == rawsockets.Visualize {
@@ -83,7 +84,7 @@ func sendMovement(direcao string) {
 	// enviar direcao
 	err := rawsockets.SendContent(nil, keyType)
 	if (err != nil) {
-		rawsockets.ServerState.WriteLog(fmt.Sprintf("\t- erro ao enviar movimento ao servidor: %s\n", err.Error()))
+		debug.WriteLog("\t- erro ao enviar movimento ao servidor: %s\n", err.Error())
 	}
 }
 

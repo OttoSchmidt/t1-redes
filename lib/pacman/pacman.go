@@ -97,7 +97,9 @@ func createCoin(x, y int, id byte) (Coin, error) {
 		return Coin{}, fmt.Errorf("erro ao criar pastilha: id nao reconhecido => %c\n", id)
 	}
 
-	file := fmt.Sprintf("./files/%s.%s", string(id), ext)
+	id = 6
+	ext = "mp4"
+	file := fmt.Sprintf("./files/%s.%s", "6", ext)
 	coin := Coin{
 		ent: Entity{
 			symbol: 'C',

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 
 	crc "pacman-redes/lib/crc"
 	debug "pacman-redes/lib/debug"
@@ -91,20 +90,10 @@ func (p PacketT) String() string {
 
 type State struct {
 	Sock            int
-	logQueue        chan string
 	SequenceNumber  uint8
 	lastReceivedSeq uint8
 	hasReceivedPkt  bool
 	lastSentMessage Message
-}
-
-func (s *State) WriteLog(msg string) {
-	s.logQueue <- msg
-}
-
-func (s *State) CloseLogWindow() {
-	close(s.logQueue)
-	time.Sleep(time.Second)
 }
 
 func (s *State) addSequence() {
@@ -167,7 +156,7 @@ func (m Message) ToBytes() []byte {
 		newPayload := make([]byte, len(payload))
 		copy(newPayload, payload)
 
-		debug.PrintLog("\t- byte p/ quebrar vlan adicionado\n")
+		debug.WriteLog("\t- byte p/ quebrar vlan adicionado\n")
 		frame = append(frame, slices.Insert(newPayload, 10, 0xff)...)
 	} else {
 		frame = append(frame, payload...)
@@ -181,7 +170,7 @@ func (m Message) ToBytes() []byte {
 		frame = append(frame, padding...)
 	}
 
-	debug.PrintLog("Mensagem convertida p/ bytes: %x\n", frame)
+	debug.WriteDebug("Mensagem convertida p/ bytes: %x\n", frame)
 
 	return frame
 }
@@ -270,7 +259,7 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 		PacketType: PacketT(bufferUsable[1] & 0x1F),
 	}
 
-	debug.PrintLog("Conteudo mensagem (CRC: %d): %v\n", crcValue, msg.Content)
+	debug.WriteDebug("Conteudo mensagem (CRC: %d): %v\n", crcValue, msg.Content)
 
 	// detectar retransmissão: sequência igual à última recebida com sucesso
 	if ServerState.hasReceivedPkt && msg.Sequence == ServerState.lastReceivedSeq {
@@ -279,7 +268,7 @@ func ReadMessage(buf []byte, n int) (Message, error) {
 
 	// validar numero de sequência
 	if msg.Sequence != ServerState.SequenceNumber {
-		return Message{}, ErrUnexpectedSequence
+		return Message{}, fmt.Errorf("sequencia inesperada. recebido: %d | esperado: %d\n", msg.Sequence, ServerState.SequenceNumber)
 	}
 
 	// tudo certo, registrar sequência recebida e incrementar para a próxima mensagem

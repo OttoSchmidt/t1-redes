@@ -19,8 +19,6 @@ func sendPacket(packet Message) error {
 
 	_, err := syscall.Write(ServerState.Sock, frame)
 
-	ServerState.WriteLog(fmt.Sprintf("[MSG] enviado  => %s\n", packet.String()))
-
 	return err
 }
 
@@ -56,10 +54,13 @@ func SendMessage(packet Message) error {
 		for attempt := 1; attempt <= MaxAttempts; attempt++ {
 			err := sendPacket(packet)
 			if err != nil {
-				return fmt.Errorf("falha ao enviar mensagem: %w", err)
+				if !errors.Is(err, syscall.ENETDOWN) {
+					return fmt.Errorf("falha ao enviar mensagem: %w", err)
+				}
 			}
 
-			debug.PrintLog("Tentativa %d/%d: enviado %d bytes (seq=%d); aguardando ACK por %dms\n", attempt, MaxAttempts, packet.Size(), packet.Sequence, timeoutMillis)
+			debug.WriteLog("[MSG] enviado (tentativa %d/%d) => %s\n", attempt, MaxAttempts, packet.String())
+			debug.WriteDebug("\t- %d bytes (seq=%d); aguardando ACK por %dms\n", packet.Size(), packet.Sequence, timeoutMillis)
 
 			msg, err := ReceivePacketTWithTimeout(timeoutMillis, Ack)
 			
@@ -79,11 +80,11 @@ func SendMessage(packet Message) error {
 					}
 				}
 			case errors.Is(err, ErrTimeout):
-				ServerState.WriteLog(fmt.Sprintf("\t- sem resposta dentro de %4dms; reenviando...\n", timeoutMillis))
+				debug.WriteLog("\t- sem resposta dentro de %4dms; reenviando...\n", timeoutMillis)
 				timeoutMillis = min(timeoutMillis*2, maxTimeoutMillis)
 				continue
 			case err == nil:
-				debug.PrintLog("\t- ack recebido\n")
+				debug.WriteLog("\t- ack recebido\n")
 				return nil
 			default:
 				return fmt.Errorf("erro ao aguardar ACK: %w", err)

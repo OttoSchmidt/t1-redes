@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -41,7 +42,7 @@ func VerifyFileViability(id byte, tam uint, fileType PacketT) (*os.File, error) 
 	// blocos disponiveis * tamanho do bloco
 	tamAvailable := stat.Bavail * uint64(stat.Bsize)
 	if tamAvailable < uint64(tam) {
-		debug.PrintLog("Espaco disponivel: %d bytes; necessario: %d bytes\n", tamAvailable, tam)
+		debug.WriteLog("nao eh possivel receber arquivo\n\t- espaco disponivel: %d bytes;\n\t- necessario: %d bytes\n", tamAvailable, tam)
 		os.Remove(fileName)
 		return nil, ErrMissingStorage
 	}
@@ -61,7 +62,7 @@ func VerifyFileViability(id byte, tam uint, fileType PacketT) (*os.File, error) 
 }
 
 func ParseFileHeader(content []byte) (id byte, tam uint, err error) {
-	debug.PrintLog("cabecalho arquivo recebido: %s\n", string(content))
+	debug.WriteDebug("cabecalho arquivo recebido: %s\n", string(content))
 
 	_, err = fmt.Sscanf(string(content), "%c-%d", &id, &tam)
 	if err != nil {
@@ -84,27 +85,37 @@ func ReceiveFile(file *os.File, tam uint) (string, error) {
 	for receivedBytes < tam {
 		msg, err := ReceivePacket(buf)
 		if err != nil {
-			debug.PrintLog("Erro ao receber pacote de arquivo: %v\n", err)
+			switch {
+			case errors.Is(err, ErrIgnoredPacket),
+				errors.Is(err, ErrInvalidStartMarker),
+				errors.Is(err, ErrDuplicatePacket),
+				errors.Is(err, syscall.EAGAIN),
+				errors.Is(err, syscall.EWOULDBLOCK),
+				errors.Is(err, syscall.EINTR):
+				continue
+			default:
+				debug.WriteLog("Erro ao receber pacote de arquivo: %v\n", err)
 
-			if errors.Is(err, ErrInvalidCRC) {
-				// enviar NACK para solicitar retransmissão
-				nackMsg := CreateMessage(nil, Nack)
-				if sendErr := SendMessage(nackMsg); sendErr != nil {
-					debug.PrintLog("Erro ao enviar NACK para pacote com CRC invalido: %v\n", sendErr)
+				if errors.Is(err, ErrInvalidCRC) {
+					// enviar NACK para solicitar retransmissão
+					nackMsg := CreateMessage(nil, Nack)
+					if sendErr := SendMessage(nackMsg); sendErr != nil {
+						debug.WriteLog("Erro ao enviar NACK para pacote com CRC invalido: %v\n", sendErr)
+					}
 				}
+				continue
 			}
-			continue
 		}
 
 		// escrever os bytes recebidos no buffer de arquivo
 		copy(fileBuffer[receivedBytes:], msg.Content)
 		receivedBytes += uint(len(msg.Content))
 
-		ServerState.WriteLog(fmt.Sprintf("\t- [ARQ] %d%% recebido (%d de %d bytes)\n", 100*receivedBytes/tam, receivedBytes, tam))
+		debug.WriteLog("\t- [ARQ] %d%% recebido (%d de %d bytes)\n", 100*receivedBytes/tam, receivedBytes, tam)
 
 		ackMsg := CreateMessage(nil, Ack)
 		if sendErr := SendMessage(ackMsg); sendErr != nil {
-			debug.PrintLog("Erro ao enviar ACK para pacote recebido: %v\n", sendErr)
+			debug.WriteLog("Erro ao enviar ACK para pacote recebido: %v\n", sendErr)
 			continue
 		}
 

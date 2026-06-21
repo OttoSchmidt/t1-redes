@@ -15,7 +15,7 @@ Recebe um pacote do socket, aguardando indefinidamente
 func ReceivePacket(buf []byte) (Message, error) {
 	n, addr, err := syscall.Recvfrom(ServerState.Sock, buf, 0)
 	if err != nil {
-		return Message{}, fmt.Errorf("falha ao receber pacote: %w", err)
+		return Message{}, err
 	}
 
 	if llAddr, ok := addr.(*syscall.SockaddrLinklayer); ok && llAddr.Pkttype == syscall.PACKET_OUTGOING {
@@ -27,14 +27,14 @@ func ReceivePacket(buf []byte) (Message, error) {
 	msg, err := ReadMessage(buf, n)
 	if err != nil {
 		if err != ErrInvalidStartMarker {
-			debug.PrintLog("Erro ao ler mensagem: %v\n", err)
-			debug.PrintLog("\tmsg recebida: %s\n", msg.ToBytes())
+			debug.WriteLog("Erro ao ler mensagem: %v\n", err)
+			debug.WriteDebug("\tmsg recebida: %s\n", msg.ToBytes())
 		}
 			
 		return Message{}, err
 	}
 
-	ServerState.WriteLog(fmt.Sprintf("[MSG] recebido => %s\n", msg.String()))
+	debug.WriteLog("[MSG] recebido => %s\n", msg.String())
 
 	return msg, nil
 }
@@ -153,7 +153,7 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 			msg.PacketType != TxtFile {
 			replyMsg := CreateMessage(nil, Ack)
 			if err = SendMessage(replyMsg); err != nil {
-				debug.PrintLog("erro ao enviar ack: %v\n", err)
+				debug.WriteLog("erro ao enviar ack: %v\n", err)
 			}
 		}
 
@@ -174,21 +174,21 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 				codeError := "2"
 				if errors.Is(err, ErrMissingStorage) {
 					codeError = "1"
-					ServerState.WriteLog(fmt.Sprintf("\t- %s\n", err.Error()))
+					debug.WriteLog("\t- %s\n", err.Error())
 				} else {
-					ServerState.WriteLog(fmt.Sprintf("\t- erro ao escrever arquivo: %s\n", err))
+					debug.WriteLog("\t- erro ao escrever arquivo: %s\n", err)
 				}	
 
 				replyMsg := CreateMessage([]byte(codeError), Error)
 				if err = SendMessage(replyMsg); err != nil {
-					debug.PrintLog("erro ao enviar erro: %v\n", err)
+					debug.WriteLog("erro ao enviar erro: %v\n", err)
 				}
 
 			} else {
 				// enviar ack
 				replyMsg := CreateMessage(nil, Ack)
 				if err = SendMessage(replyMsg); err != nil {
-					debug.PrintLog("erro ao enviar ack: %v\n", err)
+					debug.WriteLog("erro ao enviar ack: %v\n", err)
 				}
 			}
 
@@ -198,11 +198,11 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 				return nil, firstPktTypeReceived, fmt.Errorf("erro ao receber arquivo: %v\n", err)
 			}
 
-			ServerState.WriteLog(fmt.Sprintf("\t- arquivo recebido e salvo em: %s\n", fileName))
+			debug.WriteLog("\t- arquivo recebido e salvo em: %s\n", fileName)
 
 			// abrir arquivo com handler padrao do sistema
 			if err := OpenDefaultFileHandler(fileName); err != nil {
-				ServerState.WriteLog(fmt.Sprintf("\t- erro ao abrir arquivo com handler padrao: %v\n", err))
+				debug.WriteLog("\t- erro ao abrir arquivo com handler padrao: %v\n", err)
 			}
 
 			fileReceived = true

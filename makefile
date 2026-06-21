@@ -10,11 +10,11 @@ BUILD_FLAGS?=
 
 all: client server
 
-debug:
-	$(eval BUILD_FLAGS += -tags debug)
+debug: BUILD_FLAGS += -tags debug
+debug: all
 
-vendor:
-	$(eval BUILD_FLAGS += -mod=vendor)
+vendor: BUILD_FLAGS += -mod=vendor
+vendor: all
 
 client:
 	$(GO) build $(BUILD_FLAGS) -o $(CLIENT_BIN) client/main.go

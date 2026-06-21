@@ -1,11 +1,11 @@
 package pacman
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"os"
 	"slices"
 
+	debug "pacman-redes/lib/debug"
 	rawsockets "pacman-redes/lib/rawSockets"
 )
 
@@ -130,7 +130,7 @@ func (gs *GameState) detectGhostColision() {
 			defer file.Close()
 			err = rawsockets.SendFile('7', file)
 			if err != nil {
-				rawsockets.ServerState.WriteLog(fmt.Sprintf("[ERRO] %s\n", err.Error()))
+				debug.WriteLog("[ERRO] %s\n", err.Error())
 				break
 			}
 
@@ -187,7 +187,7 @@ func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 			defer file.Close()
 			err = rawsockets.SendFile(c.id, file)
 			if err != nil {
-				rawsockets.ServerState.WriteLog(fmt.Sprintf("[ERRO] %s\n", err.Error()))
+				debug.WriteLog("[ERRO] %s\n", err.Error())
 				break
 			}
 
