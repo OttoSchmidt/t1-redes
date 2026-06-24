@@ -27,7 +27,7 @@ test:
 
 dist:
 	mkdir -p dist
-	cp -r client/ lib/ server/ makefile go.mod go.sum dist/
+	cp -r files/ client/ lib/ server/ vendor/ makefile go.mod go.sum dist/ 
 	tar -czvf pacman-redes.tar.gz dist/
 	rm -rf dist
 

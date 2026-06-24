@@ -1,0 +1,76 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\title{\vspace{-1.5cm}Trabalho 1 - Raw Sockets}
+\author{Kauê de Amorim Silva \and Otto Schmidt}
+\date{\vspace{-1cm}}
+
+\begin{document}
+
+\maketitle
+
+\section{O que foi feito}
+
+O sistema foi desenvolvido utilizando a linguagem Go, sendo constituído por dois binários principais: o \texttt{pacman\_client} e o \texttt{pacman\_server}.
+
+\begin{itemize}
+    \item \textbf{Servidor:} Responsável por inicializar e gerenciar a matriz 40x40 do labirinto (criada a partir de um arquivo \texttt{.csv}), aplicar a movimentação dos fantasmas, contabilizar rodadas e transferir a visão de mapa apropriada e os eventuais arquivos (texto, imagem e vídeo).
+    \item \textbf{Cliente:} Responsável por captar a intenção do usuário no terminal, convertê-la em um pacote e enviá-la ao servidor. A tela é renderizada utilizando a biblioteca gráfica \textit{Bubbletea}, sendo o cliente responsável também por reconstituir e apresentar os arquivos recebidos como prêmios ou colisões.
+\end{itemize}
+
+\section{Como foi feito}
+
+A implementação do sistema foi dividida em duas frentes principais: o Protocolo de Comunicação e a Lógica do Jogo.
+
+\subsection{Protocolo de Comunicação}
+
+As principais decisões técnicas que viabilizaram a comunicação foram:
+
+\begin{enumerate}
+    \item \textbf{Cálculo de Verificação de Redundância Cíclica (CRC-8):} 
+    Utilizou-se o polinômio \texttt{0x07}. Buscando reduzir o tempo de processamento, otimizou-se a rotina geradora de CRC utilizando uma \textit{Lookup Table} com 256 valores, inicializada em tempo de compilação. A assinatura de integridade passou a ser calculada realizando apenas operações \textit{XOR} sobre a tabela por byte analisado, evitando operações pesadas de divisão polinomial bit a bit em tempo real.
+    
+    \item \textbf{Controle de Fluxo e Timeout Exponencial:} 
+    O timeout inicial é de 500ms. Durante a desconexão, cada timeout falho dobra o tempo de espera (com limite máximo de 4s), prevenindo congestionamentos na interface. Estipulou-se um máximo de 50 retentativas para evitar encerramento antecipado, o que mantém o jogo funcional caso um cabo seja reconectado. Além disso, implementou-se detecção de duplicatas (baseada no número de sequência) que reenvia o último \textit{ACK} caso o mesmo pacote seja recebido.
+    
+    \item \textbf{Transmissão de Arquivos:} 
+    Para viabilizar o fluxo de arquivos pesados (como imagens \texttt{.jpg} e vídeos \texttt{.mp4}), os dados são fatiados em múltiplos pacotes portando no máximo 31 bytes de conteúdo por quadro. Uma mensagem do tipo \textit{End} sinaliza o fim da transmissão, delegando a reconstrução do artefato à máquina receptora de forma assíncrona, que o salva em \texttt{/tmp} e abre com \texttt{xdg-open}.
+
+    \item \textbf{Padding:}
+    Quando um pacote (mensagem após empacotamento) era muito pequeno (menor que 14 bytes), ele era descartado pelos equipamentos de rede. Para contornar isso, passou-se a preencher esses pacotes curtos com bytes nulos.
+
+    \item \textbf{VLAN:}
+    Se o pacote possuísse nos bytes de offset 13 os valores \texttt{0x88} ou \texttt{0x81}, as interfaces de rede possuíam uma chance muito alta de tratar o tráfego seguindo o protocolo IEEE 802.1Q ou 802.1AD (\textit{VLAN/QinQ}). Se tal byte de Ethertype for encontrado, o programa adiciona um byte com valor \texttt{0xFF} para quebrar o campo, o qual é removido pela máquina de destino.
+\end{enumerate}
+
+\subsection{Lógica do Jogo}
+
+\begin{enumerate}    
+    \item \textbf{Movimentação dos Fantasmas:}
+    Os fantasmas possuem comportamentos distintos ao colidir com paredes: o Vermelho usa a regra da mão esquerda; o Azul usa a da mão direita; o Verde alterna entre esquerda e direita a cada colisão; e o Amarelo escolhe uma direção aleatória.
+    
+    \item \textbf{Geração do Mapa:}
+    Para evitar que o pacman, fantasmas e moedas sejam gerados em posições inacessíveis do cenário (por exemplo, dentro das letras P e R do mapa da UFPR), é possível inserir o caractere \texttt{-} no arquivo \texttt{.csv} do mapa. Este caractere impede a geração de entidades naquela posição, porém fica invisível visualmente para os jogadores.
+    
+    \item \textbf{Janela de Logs:}
+    Para imprimir um log na janela separada, as mensagens alimentam uma \textit{Goroutine} que escreve de forma não-bloqueante em um \textit{pipe} nomeado (\texttt{/tmp/pacman\_pipe}). No início do programa, é invocada uma nova janela de terminal (\texttt{ptyxis}) encarregada apenas de ler esse \textit{pipe}.
+\end{enumerate}
+
+\section{Testes Realizados}
+\begin{enumerate}
+    \item \textbf{Ambiente Local (lo):} Testes iniciais de transmissão de mensagens na interface \texttt{loopback}.
+    \item \textbf{Ambiente Virtual (vnet):} Testes da implementação do protocolo de rede finalizado, principalmente o transporte de arquivos e timeouts, numa interface virtual para comunicação com uma máquina virtual.
+    \item \textbf{Conexão Física a Cabo:} Validação final do protocolo e do jogo, retirando o cabo repetidamente para atestar o funcionamento das retransmissões.
+\end{enumerate}
+
+\section{Resultados e Conclusão}
+
+O sistema final apresenta alta estabilidade. O controle de erros e as retransmissões operam em conjunto para contornar perdas eficientemente. Contudo, o protocolo apresenta certa lentidão ao transportar arquivos grandes, pois para transmitir 31 bytes são necessárias 2 mensagens (uma de dados e um ACK), aumentando a latência e diminuindo a velocidade de transmissão.
+
+\end{document}
