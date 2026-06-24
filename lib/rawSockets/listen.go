@@ -215,7 +215,10 @@ func ReceiveContent(buf []byte) ([]byte, PacketT, error) {
 
 			fileReceived = true
 		case End, EndConn:
-			if !fileReceived {
+			if !fileReceived || msg.PacketType == EndConn {
+				if msg.PacketType == EndConn {
+					firstPktTypeReceived = EndConn
+				}
 				messageCompleted = true
 			} else {
 				fileReceived = false // receber nova visualizacao
