@@ -35,7 +35,7 @@ func init() {
 	cmd := exec.Command("sudo", "-u", user,
 		"env",
 		"XDG_RUNTIME_DIR=/run/user/"+uid,
-		"gnome-terminal", "--window", "--", "bash", "-c", "cat < "+pipePath,
+		"ptyxis", "--new-window", "--", "bash", "-c", "cat < "+pipePath,
 	)
 
 	output, err := cmd.CombinedOutput()
