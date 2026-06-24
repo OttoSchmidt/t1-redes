@@ -38,7 +38,7 @@ func ResendLastSent() error {
 
 /*
 Envia a mensagem pelo socket especificado. Se o tipo da mensagem for ACK, NACK ou Error, é enviada sem aguardar resposta.
-Para outros tipos, implementa um mecanismo de retransmissão com timeout e limite de tentativas, aguardando alguma resposta.
+Para outros tipos, implementa um mecanSendMessageismo de retransmissão com timeout e limite de tentativas, aguardando alguma resposta.
 */
 func SendMessage(packet Message) error {
 	if (packet.PacketType == Ack || packet.PacketType == Nack || packet.PacketType == Error) {
@@ -122,11 +122,13 @@ func SendContent(content []byte, pktType PacketT) error {
 		}
 	}
 
-	// enviar mensagem de fim
-	endMsg := CreateMessage(nil, End)
-	err := SendMessage(endMsg)
-	if err != nil {
-		return fmt.Errorf("erro ao enviar mensagem de fim: %w\n", err)
+	if pktType != EndConn && pktType != End {
+		// enviar mensagem de fim
+		endMsg := CreateMessage(nil, End)
+		err := SendMessage(endMsg)
+		if err != nil {
+			return fmt.Errorf("erro ao enviar mensagem de fim: %w\n", err)
+		}
 	}
 
 	return nil

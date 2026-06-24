@@ -73,7 +73,7 @@ func main() {
 
 				if gs.CoinsCollected == 6 {
 					gameRunning = false
-					continue
+					break
 				} 
 
 				// enviar novo mapa
