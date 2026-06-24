@@ -71,7 +71,7 @@ func main() {
 					fmt.Printf("erro ao movimentar player: %s\n", err.Error())
 				}
 
-				if gs.CoinsCollected == 6 {
+				if gs.CoinsCollected >= 6 {
 					gameRunning = false
 					break
 				} 
