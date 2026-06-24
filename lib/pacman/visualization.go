@@ -232,6 +232,7 @@ func (s *GameState) ReadMapCsv(csv string) error {
 		return fmt.Errorf("erro ao abrir mapa: %w\n", err)
 	}
 
+	s.CoinsCollected = 0
 	s.GameMap.grid = make(Grid, 40)
 	s.GameMap.ghosts = make([]Ghost, 0)
 	s.GameMap.coins = make([]Coin, 0)

@@ -71,6 +71,11 @@ func main() {
 					fmt.Printf("erro ao movimentar player: %s\n", err.Error())
 				}
 
+				if gs.CoinsCollected == 6 {
+					gameRunning = false
+					continue
+				} 
+
 				// enviar novo mapa
 				content := gs.GameMap.ToBytes()
 				err = rawsockets.SendContent(content, rawsockets.Visualize)
@@ -80,6 +85,11 @@ func main() {
 		case rawsockets.EndConn:
 			gameRunning = false
 		}
+	}
+
+	err = rawsockets.SendContent(nil, rawsockets.EndConn)
+	if err != nil {
+		fmt.Printf("erro ao enviar msg de finalizacao: %s\n", err.Error())
 	}
 
 	fmt.Println("Servidor finalizado")

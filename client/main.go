@@ -37,7 +37,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "w", "a", "s", "d":
 			sendMovement(key)
-			return getNewMap(m), nil
+			return getNewMap(m)
 		}
 	}
 
@@ -50,7 +50,7 @@ func (m model) View() tea.View {
 	return v
 }
 
-func getNewMap(oldModel model) model {
+func getNewMap(oldModel model) (model, tea.Cmd) {
 	buf := make([]byte, 256)
 
 	content, packetType, err := rawsockets.ReceiveContent(buf)
@@ -58,12 +58,15 @@ func getNewMap(oldModel model) model {
 		debug.WriteDebug("\t- erro ao receber conteudo:\n\t- %v\n", err)
 	}
 
-	if packetType == rawsockets.Init || packetType == rawsockets.Visualize {
+	switch packetType {
+	case rawsockets.Init, rawsockets.Visualize:
 		grid, center, radius := pacman.GridFromBytes(content)
-		return model(grid.ToString(center, radius))
+		return model(grid.ToString(center, radius)), nil
+	case rawsockets.EndConn:
+		return oldModel, tea.Quit
 	}
 
-	return oldModel
+	return oldModel, nil
 }
 
 func sendMovement(direcao string) {
@@ -102,7 +105,7 @@ func main() {
 		panic(err)
 	}
 
-	initMap := getNewMap("")
+	initMap, _ := getNewMap("")
 
 	p := tea.NewProgram(model(initMap))
 	if _, err := p.Run(); err != nil {

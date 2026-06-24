@@ -23,8 +23,9 @@ type Map struct {
 }
 
 type GameState struct {
-	GameMap Map
-	round   int
+	GameMap        Map
+	round  		   int
+	CoinsCollected int
 }
 
 func (gs *GameState) IncrementRound() {

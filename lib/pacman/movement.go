@@ -179,6 +179,8 @@ func (gs *GameState) MovePlayer(pkt rawsockets.PacketT) error {
 	// detectar colisao com moedas
 	for i, c := range gs.GameMap.coins {
 		if gs.GameMap.pacman.ent.pos.detectCollision(&c.ent.pos) {
+			gs.CoinsCollected++
+
 			// enviar arquivo da moeda
 			file, err := os.OpenFile(c.fileName, os.O_RDONLY, 0)
 			if err != nil {
